@@ -24,6 +24,26 @@ Facilitar a alocação de profissionais em projetos por meio de:
 - **Banco de dados**: PostgreSQL
 - **Infra local**: Docker + Docker Compose
 
+## Ambiente local com Docker
+
+O ambiente local sobe API Gateway, microsserviços Java, ML Engine e bancos PostgreSQL separados por domínio.
+
+```bash
+docker compose up --build
+```
+
+Endpoints úteis:
+
+- API Gateway: http://localhost:8080
+- Health do Gateway: http://localhost:8080/actuator/health
+- Dependências do Gateway: http://localhost:8080/health/dependencies
+- Profile Service: http://localhost:8081
+- Project Service: http://localhost:8082
+- Match Orchestrator: http://localhost:8083
+- ML Engine: http://localhost:8000
+
+As portas, credenciais locais e nomes dos bancos ficam centralizados em `.env`.
+
 ## Fluxo resumido de recomendação
 
 Frontend → API Gateway → Match Orchestrator → Project Service / Profile Service → ML Engine → Match Orchestrator → API Gateway → Frontend

@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: profile-service
+  datasource:
+    url: jdbc:postgresql://${PROFILE_DB_HOST:profile-db}:${PROFILE_DB_PORT:5432}/${PROFILE_DB_NAME:profile_service}
+    username: ${PROFILE_DB_USER:profile_user}
+    password: ${PROFILE_DB_PASSWORD:profile_password}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
+server:
+  port: ${SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

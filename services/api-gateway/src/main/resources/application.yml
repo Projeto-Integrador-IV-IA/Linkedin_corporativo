@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: api-gateway
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+services:
+  profile-url: ${PROFILE_SERVICE_URL:http://profile-service:8081}
+  project-url: ${PROJECT_SERVICE_URL:http://project-service:8082}
+  match-url: ${MATCH_ORCHESTRATOR_URL:http://match-orchestrator:8083}

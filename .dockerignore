@@ -1,0 +1,11 @@
+.git
+.idea
+.vscode
+**/target
+**/.gradle
+**/build
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+.env.local
+docker-compose.override.yml

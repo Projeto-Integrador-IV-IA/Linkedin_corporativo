@@ -1,0 +1,206 @@
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: docker/java/Dockerfile
+      args:
+        SERVICE_DIR: services/api-gateway
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: ${API_GATEWAY_PORT}
+      PROFILE_SERVICE_URL: http://profile-service:${PROFILE_SERVICE_PORT}
+      PROJECT_SERVICE_URL: http://project-service:${PROJECT_SERVICE_PORT}
+      MATCH_ORCHESTRATOR_URL: http://match-orchestrator:${MATCH_ORCHESTRATOR_PORT}
+    ports:
+      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+    depends_on:
+      profile-service:
+        condition: service_healthy
+      project-service:
+        condition: service_healthy
+      match-orchestrator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${API_GATEWAY_PORT}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - linkedin-internal
+
+  profile-service:
+    build:
+      context: .
+      dockerfile: docker/java/Dockerfile
+      args:
+        SERVICE_DIR: services/profile-service
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: ${PROFILE_SERVICE_PORT}
+      PROFILE_DB_HOST: profile-db
+      PROFILE_DB_PORT: 5432
+      PROFILE_DB_NAME: ${POSTGRES_PROFILE_DB}
+      PROFILE_DB_USER: ${POSTGRES_PROFILE_USER}
+      PROFILE_DB_PASSWORD: ${POSTGRES_PROFILE_PASSWORD}
+    ports:
+      - "${PROFILE_SERVICE_PORT}:${PROFILE_SERVICE_PORT}"
+    depends_on:
+      profile-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${PROFILE_SERVICE_PORT}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - linkedin-internal
+
+  project-service:
+    build:
+      context: .
+      dockerfile: docker/java/Dockerfile
+      args:
+        SERVICE_DIR: services/project-service
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: ${PROJECT_SERVICE_PORT}
+      PROJECT_DB_HOST: project-db
+      PROJECT_DB_PORT: 5432
+      PROJECT_DB_NAME: ${POSTGRES_PROJECT_DB}
+      PROJECT_DB_USER: ${POSTGRES_PROJECT_USER}
+      PROJECT_DB_PASSWORD: ${POSTGRES_PROJECT_PASSWORD}
+    ports:
+      - "${PROJECT_SERVICE_PORT}:${PROJECT_SERVICE_PORT}"
+    depends_on:
+      project-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${PROJECT_SERVICE_PORT}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - linkedin-internal
+
+  match-orchestrator:
+    build:
+      context: .
+      dockerfile: docker/java/Dockerfile
+      args:
+        SERVICE_DIR: services/match-orchestrator
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: ${MATCH_ORCHESTRATOR_PORT}
+      MATCH_DB_HOST: match-db
+      MATCH_DB_PORT: 5432
+      MATCH_DB_NAME: ${POSTGRES_MATCH_DB}
+      MATCH_DB_USER: ${POSTGRES_MATCH_USER}
+      MATCH_DB_PASSWORD: ${POSTGRES_MATCH_PASSWORD}
+      PROFILE_SERVICE_URL: http://profile-service:${PROFILE_SERVICE_PORT}
+      PROJECT_SERVICE_URL: http://project-service:${PROJECT_SERVICE_PORT}
+      ML_ENGINE_URL: http://ml-engine:${ML_ENGINE_PORT}
+    ports:
+      - "${MATCH_ORCHESTRATOR_PORT}:${MATCH_ORCHESTRATOR_PORT}"
+    depends_on:
+      match-db:
+        condition: service_healthy
+      profile-service:
+        condition: service_healthy
+      project-service:
+        condition: service_healthy
+      ml-engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${MATCH_ORCHESTRATOR_PORT}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - linkedin-internal
+
+  ml-engine:
+    build:
+      context: services/ml-engine
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      PORT: ${ML_ENGINE_PORT}
+    ports:
+      - "${ML_ENGINE_PORT}:${ML_ENGINE_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${ML_ENGINE_PORT}/health', timeout=2).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - linkedin-internal
+
+  profile-db:
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_DB: ${POSTGRES_PROFILE_DB}
+      POSTGRES_USER: ${POSTGRES_PROFILE_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PROFILE_PASSWORD}
+    volumes:
+      - profile-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - linkedin-internal
+
+  project-db:
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_DB: ${POSTGRES_PROJECT_DB}
+      POSTGRES_USER: ${POSTGRES_PROJECT_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PROJECT_PASSWORD}
+    volumes:
+      - project-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - linkedin-internal
+
+  match-db:
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_DB: ${POSTGRES_MATCH_DB}
+      POSTGRES_USER: ${POSTGRES_MATCH_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_MATCH_PASSWORD}
+    volumes:
+      - match-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - linkedin-internal
+
+networks:
+  linkedin-internal:
+    driver: bridge
+
+volumes:
+  profile-db-data:
+  project-db-data:
+  match-db-data:
