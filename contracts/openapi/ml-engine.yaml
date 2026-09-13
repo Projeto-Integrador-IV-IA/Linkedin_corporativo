@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: ML Engine API
+  version: 1.0.0
+  description: Contrato entre o Match Orchestrator e o serviço Python de inferência.
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Serviço disponível
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: UP
+  /predict:
+    post:
+      operationId: predict
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchRequest'
+      responses:
+        '200':
+          description: Candidatos ordenados por compatibilidade
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '422':
+          description: Payload inválido
+components:
+  schemas:
+    Candidate:
+      type: object
+      required: [candidate_id, skills]
+      properties:
+        candidate_id:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+    MatchRequest:
+      type: object
+      required: [candidates, required_skills]
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/Candidate'
+        required_skills:
+          type: array
+          items:
+            type: string
+    MatchResult:
+      type: object
+      required: [candidate_id, score, matched_skills, skill_gaps]
+      properties:
+        candidate_id:
+          type: string
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        matched_skills:
+          type: array
+          items:
+            type: string
+        skill_gaps:
+          type: array
+          items:
+            type: string
+    MatchResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchResult'

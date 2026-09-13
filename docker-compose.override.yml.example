@@ -1,0 +1,20 @@
+# Copie este arquivo para docker-compose.override.yml apenas quando precisar
+# depurar um serviço diretamente pelo host. O arquivo real é ignorado pelo Git.
+# O uso normal deve continuar passando pelo API Gateway.
+
+services:
+  profile-service:
+    ports:
+      - "${PROFILE_SERVICE_PORT}:${PROFILE_SERVICE_PORT}"
+
+  project-service:
+    ports:
+      - "${PROJECT_SERVICE_PORT}:${PROJECT_SERVICE_PORT}"
+
+  match-orchestrator:
+    ports:
+      - "${MATCH_ORCHESTRATOR_PORT}:${MATCH_ORCHESTRATOR_PORT}"
+
+  ml-engine:
+    ports:
+      - "${ML_ENGINE_PORT}:${ML_ENGINE_PORT}"

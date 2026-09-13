@@ -45,8 +45,8 @@ services:
       PROFILE_DB_NAME: ${POSTGRES_PROFILE_DB}
       PROFILE_DB_USER: ${POSTGRES_PROFILE_USER}
       PROFILE_DB_PASSWORD: ${POSTGRES_PROFILE_PASSWORD}
-    ports:
-      - "${PROFILE_SERVICE_PORT}:${PROFILE_SERVICE_PORT}"
+    expose:
+      - "${PROFILE_SERVICE_PORT}"
     depends_on:
       profile-db:
         condition: service_healthy
@@ -74,8 +74,8 @@ services:
       PROJECT_DB_NAME: ${POSTGRES_PROJECT_DB}
       PROJECT_DB_USER: ${POSTGRES_PROJECT_USER}
       PROJECT_DB_PASSWORD: ${POSTGRES_PROJECT_PASSWORD}
-    ports:
-      - "${PROJECT_SERVICE_PORT}:${PROJECT_SERVICE_PORT}"
+    expose:
+      - "${PROJECT_SERVICE_PORT}"
     depends_on:
       project-db:
         condition: service_healthy
@@ -106,8 +106,8 @@ services:
       PROFILE_SERVICE_URL: http://profile-service:${PROFILE_SERVICE_PORT}
       PROJECT_SERVICE_URL: http://project-service:${PROJECT_SERVICE_PORT}
       ML_ENGINE_URL: http://ml-engine:${ML_ENGINE_PORT}
-    ports:
-      - "${MATCH_ORCHESTRATOR_PORT}:${MATCH_ORCHESTRATOR_PORT}"
+    expose:
+      - "${MATCH_ORCHESTRATOR_PORT}"
     depends_on:
       match-db:
         condition: service_healthy
@@ -134,8 +134,8 @@ services:
       - .env
     environment:
       PORT: ${ML_ENGINE_PORT}
-    ports:
-      - "${ML_ENGINE_PORT}:${ML_ENGINE_PORT}"
+    expose:
+      - "${ML_ENGINE_PORT}"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${ML_ENGINE_PORT}/health', timeout=2).read()\""]
       interval: 10s

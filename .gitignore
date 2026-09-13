@@ -1,0 +1,41 @@
+# Configuração local e segredos
+.env
+.env.*
+!.env.example
+
+# Java/Maven/Gradle
+**/target/
+**/.gradle/
+**/build/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+
+# Node/frontend
+**/node_modules/
+**/dist/
+**/.vite/
+
+# IDE e sistema operacional
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Dados e artefatos locais de ML
+ml/data/raw/*
+!ml/data/raw/.gitkeep
+ml/data/processed/*
+!ml/data/processed/.gitkeep
+ml/models/*
+!ml/models/.gitkeep
+
+# Overrides locais do Compose
+docker-compose.override.yml
