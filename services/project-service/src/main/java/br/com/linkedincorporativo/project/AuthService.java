@@ -56,6 +56,16 @@ public class AuthService {
         return issueToken(user);
     }
 
+    public UserAccount resetPassword(String email, String newPassword) {
+        if (email == null || email.isBlank() || newPassword == null || newPassword.length() < 6) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe um e-mail e uma senha com pelo menos 6 caracteres.");
+        }
+        UserAccount user = users.findByEmailIgnoreCase(email.trim())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conta não encontrada."));
+        user.setPasswordHash(encoder.encode(newPassword));
+        return issueToken(user);
+    }
+
     private UserAccount issueToken(UserAccount user) {
         user.setSessionToken(UUID.randomUUID().toString() + UUID.randomUUID());
         return users.save(user);

@@ -13,6 +13,9 @@ spring:
 server:
   port: ${SERVER_PORT:8082}
 
+auth:
+  reset-key: ${AUTH_RESET_KEY:}
+
 management:
   endpoints:
     web:

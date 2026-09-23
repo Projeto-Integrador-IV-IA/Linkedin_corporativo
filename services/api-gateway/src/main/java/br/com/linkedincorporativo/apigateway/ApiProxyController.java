@@ -37,6 +37,7 @@ public class ApiProxyController {
 
     @PostMapping("/auth/register") public ResponseEntity<Object> register(@RequestBody Object body) { return post(projectUrl + "/api/auth/register", body, null); }
     @PostMapping("/auth/login") public ResponseEntity<Object> login(@RequestBody Object body) { return post(projectUrl + "/api/auth/login", body, null); }
+    @PostMapping("/auth/reset-password") public ResponseEntity<Object> resetPassword(@RequestHeader(value = "X-Auth-Reset-Key", required = false) String resetKey, @RequestBody Object body) { return postWithHeader(projectUrl + "/api/auth/reset-password", body, "X-Auth-Reset-Key", resetKey); }
     @GetMapping("/auth/me") public ResponseEntity<Object> me(@RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/auth/me", auth); }
     @PatchMapping("/auth/profile") public ResponseEntity<Object> linkProfile(@RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return patch(projectUrl + "/api/auth/profile", body, auth); }
 
@@ -86,6 +87,11 @@ public class ApiProxyController {
     }
     private ResponseEntity<Object> post(String url, Object body, String auth) {
         try { return client.post().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class); }
+        catch (RestClientResponseException exception) { return error(exception, url); }
+        catch (RestClientException exception) { return unavailable(exception, url); }
+    }
+    private ResponseEntity<Object> postWithHeader(String url, Object body, String headerName, String headerValue) {
+        try { return client.post().uri(url).headers(headers -> { if (headerValue != null && !headerValue.isBlank()) headers.set(headerName, headerValue); }).body(body).retrieve().toEntity(Object.class); }
         catch (RestClientResponseException exception) { return error(exception, url); }
         catch (RestClientException exception) { return unavailable(exception, url); }
     }

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,8 +22,12 @@ import org.slf4j.LoggerFactory;
 public class AuthController {
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
     private final AuthService auth;
+    private final String resetKey;
 
-    public AuthController(AuthService auth) { this.auth = auth; }
+    public AuthController(AuthService auth, @Value("${auth.reset-key:}") String resetKey) {
+        this.auth = auth;
+        this.resetKey = resetKey;
+    }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Credentials request) {
@@ -44,6 +49,25 @@ public class AuthController {
             throw exception;
         } catch (RuntimeException exception) {
             log.error("Falha inesperada ao autenticar usuário com e-mail {}", safeEmail(request), exception);
+            throw exception;
+        }
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(
+        @RequestHeader(value = "X-Auth-Reset-Key", required = false) String providedKey,
+        @RequestBody ResetPasswordRequest request
+    ) {
+        if (resetKey.isBlank() || providedKey == null || !resetKey.equals(providedKey)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Reset de senha desabilitado ou não autorizado."));
+        }
+        try {
+            UserAccount user = auth.resetPassword(request.email(), request.newPassword());
+            return ResponseEntity.ok(view(user));
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            log.error("Falha inesperada ao redefinir senha para {}", safeEmail(request), exception);
             throw exception;
         }
     }
@@ -82,6 +106,11 @@ public class AuthController {
         return request == null || request.email() == null ? "<vazio>" : request.email().trim();
     }
 
+    private String safeEmail(ResetPasswordRequest request) {
+        return request == null || request.email() == null ? "<vazio>" : request.email().trim();
+    }
+
     public record Credentials(String email, String password, String displayName, String role) {}
+    public record ResetPasswordRequest(String email, String newPassword) {}
     public record ProfileLink(Long profileId) {}
 }
