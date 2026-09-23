@@ -12,8 +12,8 @@ services:
       PROFILE_SERVICE_URL: http://profile-service:${PROFILE_SERVICE_PORT}
       PROJECT_SERVICE_URL: http://project-service:${PROJECT_SERVICE_PORT}
       MATCH_ORCHESTRATOR_URL: http://match-orchestrator:${MATCH_ORCHESTRATOR_PORT}
-    ports:
-      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+    expose:
+      - "${API_GATEWAY_PORT}"
     depends_on:
       profile-service:
         condition: service_healthy
@@ -37,7 +37,7 @@ services:
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
     expose:
-    - "3000"
+      - "3000"
     depends_on:
       api-gateway:
         condition: service_healthy

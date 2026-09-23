@@ -23,8 +23,11 @@ Serviços do Compose:
 - `ml-engine`;
 - `redis`, com volume `redis-data`.
 
-Somente frontend e Gateway precisam ser acessados pelo host. Os serviços,
-PostgreSQL e Redis usam a rede interna do Compose.
+O Compose principal não publica portas no host: frontend e Gateway usam
+`expose` para que o Dokploy/Traefik faça o roteamento. Para desenvolvimento
+local, copie [`../docker-compose.override.yml.example`](../docker-compose.override.yml.example)
+para `docker-compose.override.yml`; esse override publica o frontend em `3000`
+e o Gateway em `8080`.
 
 ## Healthchecks
 

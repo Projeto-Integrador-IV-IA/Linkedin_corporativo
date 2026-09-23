@@ -3,6 +3,14 @@
 # O uso normal deve continuar passando pelo API Gateway.
 
 services:
+  api-gateway:
+    ports:
+      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+
+  frontend:
+    ports:
+      - "3000:3000"
+
   profile-service:
     ports:
       - "${PROFILE_SERVICE_PORT}:${PROFILE_SERVICE_PORT}"

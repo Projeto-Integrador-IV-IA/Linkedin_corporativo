@@ -73,10 +73,18 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Após a subida do ambiente, acesse a aplicação em `http://localhost:3000`. O
-frontend usa o API Gateway em `http://localhost:8080`; os serviços internos e
-os bancos PostgreSQL e o Redis permanecem na rede do Compose. Na primeira
-execução, crie uma conta pela tela de login; não existem credenciais padrão.
+Após a subida do ambiente, o Compose principal mantém os serviços na rede
+interna, adequado para publicação via Dokploy/Traefik. Para desenvolvimento
+local com acesso pelo host, copie o override antes de subir:
+
+```bash
+cp docker-compose.override.yml.example docker-compose.override.yml
+docker compose up --build
+```
+
+Nesse modo, acesse `http://localhost:3000`; o frontend usa o Gateway em
+`http://localhost:8080`. Na primeira execução, crie uma conta pela tela de
+login; não existem credenciais padrão.
 
 Verificar o ambiente:
 
@@ -90,7 +98,7 @@ Serviços disponíveis no host:
 
 | Serviço | Endereço | Observação |
 |---|---|---|
-| API Gateway | `http://localhost:8080` | única entrada pública do backend |
+| API Gateway | `api-gateway:8080` | acessível pela rede Docker ou pelo domínio configurado |
 | Profile Service | `profile-service:8081` | acessível somente na rede Docker |
 | Project Service | `project-service:8082` | acessível somente na rede Docker |
 | Match Orchestrator | `match-orchestrator:8083` | acessível somente na rede Docker |
