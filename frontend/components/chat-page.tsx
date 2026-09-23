@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card"
 const CHAT_POLL_INTERVAL = 2000
 
 export function ChatPage() {
-  const { profiles } = useApp()
+  const { profiles, authUser } = useApp()
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -31,7 +31,8 @@ export function ChatPage() {
   }, [])
 
   const selected = conversations.find((item) => item.id === selectedId)
-  const profile = selected ? profiles.find((item) => item.id === selected.professionalProfileId) : undefined
+  const selectedIsRecruiter = selected ? selected.recruiterUserId === authUser?.id : false
+  const profile = selected ? profiles.find((item) => item.id === (selectedIsRecruiter ? selected.professionalProfileId : selected.recruiterProfileId)) : undefined
   const unreadTotal = conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
 
   return (
@@ -46,8 +47,8 @@ export function ChatPage() {
             {conversations.length === 0 && <p className="p-3 text-sm text-muted-foreground">Nenhuma conversa ainda.</p>}
             {conversations.map((conversation) => (
               <Button key={conversation.id} variant={selectedId === conversation.id ? "secondary" : "ghost"} className="h-auto justify-start gap-3 p-3 text-left" onClick={() => setSelectedId(conversation.id)}>
-                {profiles.find((item) => item.id === conversation.professionalProfileId) ? <ProfileAvatar profile={profiles.find((item) => item.id === conversation.professionalProfileId)!} className="size-9" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><MessageCircle className="size-4" /></span>}
-                <span className="min-w-0"><span className="block truncate font-medium">{conversation.professionalName}</span><span className="block truncate text-xs text-muted-foreground">{conversation.projectTitle}</span></span>
+                {profiles.find((item) => item.id === (conversation.recruiterUserId === authUser?.id ? conversation.professionalProfileId : conversation.recruiterProfileId)) ? <ProfileAvatar profile={profiles.find((item) => item.id === (conversation.recruiterUserId === authUser?.id ? conversation.professionalProfileId : conversation.recruiterProfileId))!} className="size-9" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><MessageCircle className="size-4" /></span>}
+                <span className="min-w-0"><span className="block truncate font-medium">{conversation.recruiterUserId === authUser?.id ? conversation.professionalName : conversation.recruiterName}</span><span className="block truncate text-xs text-muted-foreground">{conversation.projectTitle}</span></span>
                 {conversation.unreadCount > 0 && <Badge variant="destructive" className="ml-auto shrink-0">{conversation.unreadCount}</Badge>}
               </Button>
             ))}

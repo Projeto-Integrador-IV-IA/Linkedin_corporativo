@@ -35,13 +35,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { SKILL_LEVELS, type Profile, type Skill, type SkillLevel } from "@/lib/types"
 
 let skillCounter = 0
+let portfolioCounter = 0
 function newSkillId() {
   skillCounter += 1
   return `new-skill-${Date.now()}-${skillCounter}`
 }
 
+function newPortfolioId() {
+  portfolioCounter += 1
+  return `new-portfolio-${Date.now()}-${portfolioCounter}`
+}
+
 export function ProfileForm() {
-  const { currentProfile, saveCurrentProfile } = useApp()
+  const { currentProfile, authUser, saveCurrentProfile } = useApp()
   const [draft, setDraft] = useState<Profile>(currentProfile)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -77,6 +83,21 @@ export function ProfileForm() {
     )
   }
 
+  function updatePortfolio(id: string, patch: Partial<NonNullable<Profile["portfolioProjects"]>[number]>) {
+    update("portfolioProjects", (draft.portfolioProjects ?? []).map((item) => item.id === id ? { ...item, ...patch } : item))
+  }
+
+  function addPortfolio() {
+    update("portfolioProjects", [
+      ...(draft.portfolioProjects ?? []),
+      { id: newPortfolioId(), title: "", description: "", technologies: "" },
+    ])
+  }
+
+  function removePortfolio(id: string) {
+    update("portfolioProjects", (draft.portfolioProjects ?? []).filter((item) => item.id !== id))
+  }
+
   function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
@@ -100,7 +121,7 @@ export function ProfileForm() {
     try {
       const persisted = await saveCurrentProfile({
         ...draft,
-        email: draft.email?.trim() ?? "",
+        email: authUser?.email ?? draft.email?.trim() ?? "",
         skills: draft.skills.filter((s) => s.name.trim() !== ""),
       })
       setDraft(persisted)
@@ -151,10 +172,12 @@ export function ProfileForm() {
                   id="email"
                   type="email"
                   placeholder="seu.email@empresa.com"
-                  value={draft.email ?? ""}
-                  onChange={(e) => update("email", e.target.value)}
+                  value={authUser?.email ?? draft.email ?? ""}
+                  readOnly
+                  disabled
                   required
                 />
+                <p className="text-xs text-muted-foreground">O e-mail do perfil é o mesmo usado no login e não pode ser alterado aqui.</p>
               </Field>
               <Field>
                 <FieldLabel htmlFor="education">Escolaridade</FieldLabel>
@@ -165,16 +188,34 @@ export function ProfileForm() {
                   onChange={(e) => update("education", e.target.value)}
                 />
               </Field>
-              <Field>
-                <FieldLabel htmlFor="projects">Projetos realizados</FieldLabel>
-                <Textarea
-                  id="projects"
-                  rows={4}
-                  placeholder="Descreva os principais projetos em que você atuou"
-                  value={draft.projects}
-                  onChange={(e) => update("projects", e.target.value)}
-                />
-              </Field>
+              <FieldSet>
+                <FieldLegend variant="label">Projetos realizados</FieldLegend>
+                <p className="text-sm text-muted-foreground">Adicione vários projetos. Projetos aceitos em vagas entram automaticamente nesta lista.</p>
+                <div className="flex flex-col gap-3">
+                  {(draft.portfolioProjects ?? []).map((project) => (
+                    <div key={project.id} className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                      <div className="flex items-start gap-2">
+                        <Field className="flex-1">
+                          <FieldLabel htmlFor={`portfolio-title-${project.id}`}>Título</FieldLabel>
+                          <Input id={`portfolio-title-${project.id}`} placeholder="Ex.: Plataforma de pagamentos" value={project.title} onChange={(event) => updatePortfolio(project.id, { title: event.target.value })} readOnly={Boolean(project.sourceProjectId)} />
+                        </Field>
+                        {!project.sourceProjectId && <Button type="button" variant="ghost" size="icon" className="mt-6 text-muted-foreground hover:text-destructive" onClick={() => removePortfolio(project.id)} aria-label="Remover projeto"><Trash2 /></Button>}
+                      </div>
+                      {project.sourceProjectId && <p className="text-xs font-medium text-primary">Projeto aceito automaticamente</p>}
+                      <Field>
+                        <FieldLabel htmlFor={`portfolio-description-${project.id}`}>Descrição</FieldLabel>
+                        <Textarea id={`portfolio-description-${project.id}`} rows={2} placeholder="Descreva sua atuação" value={project.description} onChange={(event) => updatePortfolio(project.id, { description: event.target.value })} readOnly={Boolean(project.sourceProjectId)} />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor={`portfolio-technologies-${project.id}`}>Tecnologias e skills</FieldLabel>
+                        <Input id={`portfolio-technologies-${project.id}`} placeholder="Ex.: React, Python, PostgreSQL" value={project.technologies} onChange={(event) => updatePortfolio(project.id, { technologies: event.target.value })} readOnly={Boolean(project.sourceProjectId)} />
+                      </Field>
+                    </div>
+                  ))}
+                  {(draft.portfolioProjects ?? []).length === 0 && <p className="text-sm text-muted-foreground">Nenhum projeto adicionado ainda.</p>}
+                </div>
+                <Button type="button" variant="outline" className="w-fit" onClick={addPortfolio}><Plus data-icon="inline-start" />Adicionar projeto</Button>
+              </FieldSet>
               <Field>
                 <FieldLabel htmlFor="profile-photo">Foto de perfil</FieldLabel>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

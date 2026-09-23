@@ -3,6 +3,7 @@ package br.com.linkedincorporativo.apigateway;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,9 +15,12 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api")
@@ -47,6 +51,8 @@ public class ApiProxyController {
     @PostMapping("/profiles/{id}/skills") public ResponseEntity<Object> addSkill(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(profileUrl + "/api/profiles/" + id + "/skills", body, auth); }
     @DeleteMapping("/profiles/{id}/skills/{skillId}") public ResponseEntity<Object> removeSkill(@PathVariable Long id, @PathVariable Long skillId, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(profileUrl + "/api/profiles/" + id + "/skills/" + skillId, auth); }
     @PostMapping("/profiles/{id}/portfolio") public ResponseEntity<Object> addPortfolio(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(profileUrl + "/api/profiles/" + id + "/portfolio", body, auth); }
+    @PutMapping("/profiles/{id}/portfolio/{portfolioId}") public ResponseEntity<Object> updatePortfolio(@PathVariable Long id, @PathVariable Long portfolioId, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return put(profileUrl + "/api/profiles/" + id + "/portfolio/" + portfolioId, body, auth); }
+    @DeleteMapping("/profiles/{id}/portfolio/{portfolioId}") public ResponseEntity<Object> removePortfolio(@PathVariable Long id, @PathVariable Long portfolioId, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(profileUrl + "/api/profiles/" + id + "/portfolio/" + portfolioId, auth); }
 
     @GetMapping("/projects") public ResponseEntity<Object> projects(@RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/projects", auth); }
     @GetMapping("/projects/{id}") public ResponseEntity<Object> project(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/projects/" + id, auth); }
@@ -65,6 +71,24 @@ public class ApiProxyController {
     @PostMapping("/chats") public ResponseEntity<Object> createChat(@RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/chats", body, auth); }
     @GetMapping("/chats/{id}/messages") public ResponseEntity<Object> messages(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/chats/" + id + "/messages", auth); }
     @PostMapping("/chats/{id}/messages") public ResponseEntity<Object> sendMessage(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/chats/" + id + "/messages", body, auth); }
+    @PostMapping(value = "/chats/{id}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Object> sendMessageWithAttachment(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth,
+                                                              @RequestPart(value = "content", required = false) String content,
+                                                              @RequestPart(value = "file", required = false) MultipartFile file) {
+        return postMultipart(projectUrl + "/api/chats/" + id + "/messages", content, file, auth);
+    }
+    @GetMapping("/chats/{id}/messages/{messageId}/attachment")
+    public ResponseEntity<Object> attachment(@PathVariable Long id, @PathVariable Long messageId, @RequestHeader(value = "Authorization", required = false) String auth) {
+        try {
+            ResponseEntity<byte[]> response = client.get().uri(projectUrl + "/api/chats/" + id + "/messages/" + messageId + "/attachment")
+                .headers(headers -> addAuth(headers, auth)).retrieve().toEntity(byte[].class);
+            HttpHeaders headers = new HttpHeaders();
+            if (response.getHeaders().getContentType() != null) headers.setContentType(response.getHeaders().getContentType());
+            if (response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION) != null) headers.set(HttpHeaders.CONTENT_DISPOSITION, response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION));
+            if (response.getHeaders().getContentLength() >= 0) headers.setContentLength(response.getHeaders().getContentLength());
+            return new ResponseEntity<>(response.getBody(), headers, response.getStatusCode());
+        } catch (RestClientResponseException exception) { return error(exception); }
+    }
     @GetMapping("/chats/{id}/note") public ResponseEntity<Object> note(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/chats/" + id + "/note", auth); }
     @PutMapping("/chats/{id}/note") public ResponseEntity<Object> saveNote(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return put(projectUrl + "/api/chats/" + id + "/note", body, auth); }
 
@@ -81,6 +105,16 @@ public class ApiProxyController {
     }
     private ResponseEntity<Object> post(String url, Object body, String auth) {
         try { return client.post().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class); }
+        catch (RestClientResponseException exception) { return error(exception); }
+    }
+    private ResponseEntity<Object> postMultipart(String url, String content, MultipartFile file, String auth) {
+        MultipartBodyBuilder form = new MultipartBodyBuilder();
+        form.part("content", content == null ? "" : content);
+        if (file != null && !file.isEmpty()) {
+            var part = form.part("file", file.getResource()).filename(file.getOriginalFilename());
+            if (file.getContentType() != null) part.contentType(MediaType.parseMediaType(file.getContentType()));
+        }
+        try { return client.post().uri(url).headers(headers -> addAuth(headers, auth)).contentType(MediaType.MULTIPART_FORM_DATA).body(form.build()).retrieve().toEntity(Object.class); }
         catch (RestClientResponseException exception) { return error(exception); }
     }
     private ResponseEntity<Object> put(String url, Object body, String auth) {

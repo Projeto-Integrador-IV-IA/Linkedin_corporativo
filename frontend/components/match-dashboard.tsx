@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BadgeCheck, Check, GraduationCap, MessageCircle, Sparkles, Target, Users, X } from "lucide-react"
+import { BadgeCheck, Check, GraduationCap, MessageCircle, RefreshCw, Sparkles, Target, Users, X } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
 import { ChatPanel } from "@/components/chat-panel"
@@ -85,7 +85,13 @@ function ProfileDetailDialog({ profile }: { profile: Profile }) {
           </div>
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-medium">Projetos realizados</p>
-            <p className="text-sm text-muted-foreground">{profile.projects}</p>
+            {profile.portfolioProjects && profile.portfolioProjects.length > 0 ? <div className="flex flex-col gap-2">
+              {profile.portfolioProjects.map((project) => <div key={project.id} className="rounded-md border border-border p-2 text-sm">
+                <p className="font-medium">{project.title}</p>
+                {project.description && <p className="text-muted-foreground">{project.description}</p>}
+                {project.technologies && <p className="text-xs text-muted-foreground">{project.technologies}</p>}
+              </div>)}
+            </div> : <p className="text-sm text-muted-foreground">{profile.projects || "Nenhum projeto informado."}</p>}
           </div>
           <Separator />
           <div className="flex flex-col gap-2">
@@ -189,6 +195,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
   const [error, setError] = useState("")
   const [decisions, setDecisions] = useState<Record<string, CandidateDecision>>({})
   const [chat, setChat] = useState<{ conversation: ChatConversation; profile: Profile } | null>(null)
+  const [recalculation, setRecalculation] = useState(0)
 
   const project = useMemo(
     () => projects.find((p) => p.id === (projectId ?? selectedId)) ?? projects[0],
@@ -232,7 +239,11 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
     return () => {
       active = false
     }
-  }, [project, profiles])
+  }, [project, profiles, recalculation])
+
+  function recalculate() {
+    if (!loading) setRecalculation((value) => value + 1)
+  }
 
   async function openChat(profile: Profile) {
     if (!project) return
@@ -279,6 +290,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
         <CardHeader>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex flex-col gap-1.5">
+              {projectId ? <CardTitle className="text-xl">Recomendações de profissionais</CardTitle> : <>
               <Badge variant="outline" className="w-fit gap-1.5 text-muted-foreground">
                 <Sparkles className="size-3 text-primary" />
                 Motor supervisionado de correlação
@@ -287,7 +299,12 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
               <CardDescription className="max-w-2xl">
                 {project.description}
               </CardDescription>
+              </>}
             </div>
+            <Button type="button" variant="outline" onClick={recalculate} disabled={loading} className="shrink-0">
+              <RefreshCw data-icon="inline-start" className={loading ? "animate-spin" : ""} />
+              {loading ? "Recalculando..." : "Recalcular recomendações"}
+            </Button>
             {!projectId && (
               <div className="flex w-full flex-col gap-1.5 lg:w-72">
                 <label htmlFor="project-select" className="text-sm font-medium">
@@ -317,7 +334,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2">
+          {!projectId && <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5 text-sm font-medium">
               <Target className="size-4 text-primary" />
               Skills exigidas:
@@ -325,7 +342,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
             {project.requirements.map((r) => (
               <SkillLevelBadge key={r.id} level={r.minLevel} label={r.name} />
             ))}
-          </div>
+          </div>}
           <Separator />
           <div className="flex flex-wrap gap-6">
             <div className="flex items-center gap-2">

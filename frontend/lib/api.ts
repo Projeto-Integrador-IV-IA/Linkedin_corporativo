@@ -1,4 +1,4 @@
-import type { MatchResult, Profile, Project, SkillLevel } from "./types"
+import type { MatchResult, PortfolioProject, Profile, Project, SkillLevel } from "./types"
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api"
@@ -22,7 +22,7 @@ type RemoteProfile = {
   yearsOfExperience?: number
   bio?: string
   skills?: RemoteSkill[]
-  portfolioProjects?: { title?: string; description?: string }[]
+  portfolioProjects?: { id?: number; sourceProjectId?: number | string; title?: string; description?: string; technologies?: string }[]
 }
 
 type RemoteProject = {
@@ -34,7 +34,9 @@ type RemoteProject = {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
-  headers.set("Content-Type", "application/json")
+  const isMultipart = typeof FormData !== "undefined" && init?.body instanceof FormData
+  if (isMultipart) headers.delete("Content-Type")
+  else headers.set("Content-Type", "application/json")
   if (typeof window !== "undefined") {
     const token = window.localStorage.getItem("talentmatch_token")
     if (token) headers.set("Authorization", `Bearer ${token}`)
@@ -79,6 +81,13 @@ export function mapProfile(profile: RemoteProfile): Profile {
       ((profile.portfolioProjects ?? [])
         .map((project) => [project.title, project.description].filter(Boolean).join(" — "))
         .join("\n") || profile.bio || ""),
+    portfolioProjects: (profile.portfolioProjects ?? []).map((project) => ({
+      id: String(project.id),
+      sourceProjectId: project.sourceProjectId ? String(project.sourceProjectId) : undefined,
+      title: project.title ?? "",
+      description: project.description ?? "",
+      technologies: project.technologies ?? "",
+    })),
     skills: (profile.skills ?? []).map((skill) => ({
       id: String(skill.id ?? skill.skillId),
       skillId: String(skill.skillId ?? skill.id),
@@ -204,6 +213,29 @@ export function addProfileSkill(profileId: string, skillId: string, level: Skill
   }).then(mapProfile)
 }
 
+export function addPortfolioProject(profileId: string, project: PortfolioProject) {
+  return request<RemoteProfile>(`/profiles/${profileId}/portfolio`, {
+    method: "POST",
+    body: JSON.stringify({
+      sourceProjectId: project.sourceProjectId ? Number(project.sourceProjectId) : null,
+      title: project.title,
+      description: project.description,
+      technologies: project.technologies,
+    }),
+  }).then(mapProfile)
+}
+
+export function updatePortfolioProject(profileId: string, project: PortfolioProject) {
+  return request<RemoteProfile>(`/profiles/${profileId}/portfolio/${project.id}`, {
+    method: "PUT",
+    body: JSON.stringify({ title: project.title, description: project.description, technologies: project.technologies }),
+  }).then(mapProfile)
+}
+
+export function removePortfolioProject(profileId: string, portfolioId: string) {
+  return request<void>(`/profiles/${profileId}/portfolio/${portfolioId}`, { method: "DELETE" })
+}
+
 export function removeProfileSkill(profileId: string, skillId: string) {
   return request<void>(`/profiles/${profileId}/skills/${skillId}`, { method: "DELETE" })
 }
@@ -272,6 +304,8 @@ export interface ChatConversation {
   projectId: string
   projectTitle: string
   recruiterUserId: string
+  recruiterName: string
+  recruiterProfileId: string
   professionalProfileId: string
   professionalName: string
   professionalEmail: string
@@ -285,6 +319,11 @@ export interface ChatMessage {
   senderUserId: string
   content: string
   createdAt: string
+  attachment?: {
+    name: string
+    contentType: string
+    size: number
+  }
 }
 
 export function listChats() {
@@ -293,6 +332,7 @@ export function listChats() {
     id: String(item.id),
     projectId: String(item.projectId),
     recruiterUserId: String(item.recruiterUserId),
+    recruiterProfileId: item.recruiterProfileId ? String(item.recruiterProfileId) : "",
     professionalProfileId: String(item.professionalProfileId),
     unreadCount: Number(item.unreadCount ?? 0),
   })))
@@ -309,8 +349,37 @@ export function listMessages(conversationId: string) {
   return request<ChatMessage[]>(`/chats/${conversationId}/messages`).then((items) => items.map((item) => ({ ...item, id: String(item.id), conversationId: String(item.conversationId), senderUserId: String(item.senderUserId) })))
 }
 
-export function sendMessage(conversationId: string, content: string) {
+export function sendMessage(conversationId: string, content: string, file?: File) {
+  if (file) {
+    const form = new FormData()
+    form.append("content", content)
+    form.append("file", file)
+    return request<ChatMessage>(`/chats/${conversationId}/messages`, { method: "POST", body: form }).then((item) => ({ ...item, id: String(item.id), conversationId: String(item.conversationId), senderUserId: String(item.senderUserId) }))
+  }
   return request<ChatMessage>(`/chats/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ content }) }).then((item) => ({ ...item, id: String(item.id), conversationId: String(item.conversationId), senderUserId: String(item.senderUserId) }))
+}
+
+async function fetchChatAttachment(conversationId: string, messageId: string) {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("talentmatch_token") : null
+  const response = await fetch(`${API_BASE_URL}/chats/${conversationId}/messages/${messageId}/attachment`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    cache: "no-store",
+  })
+  if (!response.ok) throw new Error("Não foi possível carregar o arquivo.")
+  return URL.createObjectURL(await response.blob())
+}
+
+export function loadChatAttachment(conversationId: string, messageId: string) {
+  return fetchChatAttachment(conversationId, messageId)
+}
+
+export async function downloadChatAttachment(conversationId: string, messageId: string, name: string) {
+  const url = await fetchChatAttachment(conversationId, messageId)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 export function getRecruiterNote(conversationId: string) {

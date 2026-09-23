@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect } from "react"
 import Image from "next/image"
+import { usePathname, useRouter } from "next/navigation"
 import { LogOut, MessageCircle, Rocket, UserRound } from "lucide-react"
 
 import { AppProvider } from "@/components/app-provider"
@@ -17,6 +18,19 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 type View = "profile" | "projects" | "chats" | "project-create" | "project-edit" | "project-detail"
+
+function routeFor(pathname: string): { view: View; projectId: string | null; valid: boolean } {
+  const path = pathname.replace(/\/$/, "") || "/"
+  if (path === "/" || path === "/profile") return { view: "profile", projectId: null, valid: path === "/profile" }
+  if (path === "/projects") return { view: "projects", projectId: null, valid: true }
+  if (path === "/projects/new") return { view: "project-create", projectId: null, valid: true }
+  if (path === "/chats") return { view: "chats", projectId: null, valid: true }
+  const editMatch = path.match(/^\/projects\/([^/]+)\/edit$/)
+  if (editMatch) return { view: "project-edit", projectId: editMatch[1], valid: true }
+  const detailMatch = path.match(/^\/projects\/([^/]+)$/)
+  if (detailMatch) return { view: "project-detail", projectId: detailMatch[1], valid: true }
+  return { view: "profile", projectId: null, valid: false }
+}
 
 const NAV: { id: View; label: string; icon: typeof UserRound }[] = [
   { id: "profile", label: "Meu Perfil", icon: UserRound },
@@ -60,17 +74,22 @@ export function AppShell() {
 }
 
 function AppShellContent() {
-  const [view, setView] = useState<View>("profile")
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const pathname = usePathname()
+  const router = useRouter()
+  const route = routeFor(pathname)
+  const { view, projectId: selectedProjectId } = route
   const { projects, authUser, authLoading, unreadChats, logout } = useApp()
+
+  useEffect(() => {
+    if (pathname === "/") router.replace("/profile")
+    else if (!route.valid) router.replace("/profile")
+  }, [pathname, route.valid, router])
 
   if (authLoading) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Carregando sessão...</div>
   if (!authUser) return <AuthScreen />
 
-  function openProject(projectId: string) {
-    setSelectedProjectId(projectId)
-    setView("project-detail")
-  }
+  function go(path: string) { router.push(path) }
+  function openProject(projectId: string) { go(`/projects/${projectId}`) }
 
   return (
       <div className="min-h-screen bg-background">
@@ -86,14 +105,14 @@ function AppShellContent() {
             <nav className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-muted/40 p-1">
               {NAV.map((item) => {
                 const Icon = item.icon
-                const active = view === item.id
+                const active = item.id === "projects" ? pathname.startsWith("/projects") : view === item.id
                 return (
                   <Button
                     key={item.id}
                     type="button"
                     variant={active ? "default" : "ghost"}
                     size="sm"
-                    onClick={() => setView(item.id)}
+                    onClick={() => go(item.id === "profile" ? "/profile" : item.id === "projects" ? "/projects" : "/chats")}
                     className={cn(
                       "gap-2",
                       !active && "text-muted-foreground hover:text-foreground"
@@ -123,29 +142,29 @@ function AppShellContent() {
           {view === "profile" && <ProfileForm />}
           {view === "projects" && (
             <ProjectList
-              onCreate={() => setView("project-create")}
+              onCreate={() => go("/projects/new")}
               onOpen={openProject}
             />
           )}
           {view === "chats" && <ChatPage />}
           {view === "project-create" && (
             <ProjectForm
-              onCancel={() => setView("projects")}
+              onCancel={() => go("/projects")}
               onSaved={(project) => openProject(project.id)}
             />
           )}
           {view === "project-edit" && selectedProjectId && (
             <ProjectForm
               project={projects.find((item) => item.id === selectedProjectId)}
-              onCancel={() => setView("project-detail")}
+              onCancel={() => go(`/projects/${selectedProjectId}`)}
               onSaved={(project) => openProject(project.id)}
             />
           )}
           {view === "project-detail" && selectedProjectId && (
             <ProjectDetail
               projectId={selectedProjectId}
-              onBack={() => setView("projects")}
-              onEdit={() => setView("project-edit")}
+              onBack={() => go("/projects")}
+              onEdit={() => go(`/projects/${selectedProjectId}/edit`)}
             />
           )}
         </main>

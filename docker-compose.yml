@@ -92,10 +92,15 @@ services:
       PROJECT_DB_NAME: ${POSTGRES_PROJECT_DB}
       PROJECT_DB_USER: ${POSTGRES_PROJECT_USER}
       PROJECT_DB_PASSWORD: ${POSTGRES_PROJECT_PASSWORD}
+      PROFILE_SERVICE_URL: http://profile-service:${PROFILE_SERVICE_PORT}
     expose:
       - "${PROJECT_SERVICE_PORT}"
+    volumes:
+      - project-uploads:/app/uploads
     depends_on:
       project-db:
+        condition: service_healthy
+      profile-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${PROJECT_SERVICE_PORT}/actuator/health | grep -q UP"]
@@ -237,3 +242,4 @@ volumes:
   project-db-data:
   match-db-data:
   redis-data:
+  project-uploads:

@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 
 import {
   addProfileSkill,
+  addPortfolioProject,
   addRequiredSkill,
   createProfile,
   createProject,
@@ -18,9 +19,11 @@ import {
   me,
   register as registerRequest,
   removeProfileSkill,
+  removePortfolioProject,
   removeRequiredSkill,
   updateProject as updateProjectRequest,
   updateProfile,
+  updatePortfolioProject,
 } from "@/lib/api"
 import type { AuthUser } from "@/lib/api"
 import type { Profile, Project } from "@/lib/types"
@@ -140,9 +143,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     () =>
       profiles.find((profile) => profile.id === authUser?.profileId)
         ?? profiles.find((profile) => profile.email?.toLowerCase() === authUser?.email?.toLowerCase())
-        ?? EMPTY_PROFILE,
+        ?? { ...EMPTY_PROFILE, email: authUser?.email ?? "" },
     [authUser, profiles]
   )
+
+  useEffect(() => {
+    if (!authUser || authUser.profileId || profiles.length === 0) return
+    const matchingProfile = profiles.find((profile) => profile.email?.trim().toLowerCase() === authUser.email?.trim().toLowerCase())
+    if (!matchingProfile) return
+    let active = true
+    linkProfile(matchingProfile.id)
+      .then((linkedUser) => { if (active) setAuthUser(linkedUser) })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [authUser, profiles])
 
   async function login(email: string, password: string) {
     const user = await loginRequest(email, password)
@@ -167,7 +181,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   async function saveCurrentProfile(profile: Profile) {
     setError("")
     const original = profiles.find((item) => item.id === profile.id)
-    let persisted = profile.id === "new" ? await createProfile(profile) : await updateProfile(profile)
+    const profileWithLoginEmail = { ...profile, email: authUser?.email ?? profile.email }
+    let persisted = profile.id === "new" ? await createProfile(profileWithLoginEmail) : await updateProfile(profileWithLoginEmail)
 
     const catalog = await listSkills()
     for (const skill of profile.skills.filter((item) => item.name.trim())) {
@@ -182,6 +197,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     for (const skill of original?.skills ?? []) {
       if (skill.skillId && !desiredSkillIds.has(skill.skillId)) {
         await removeProfileSkill(persisted.id, skill.skillId)
+      }
+    }
+
+    const desiredPortfolio = profile.portfolioProjects ?? []
+    const desiredPortfolioIds = new Set(desiredPortfolio.map((item) => item.id))
+    for (const item of original?.portfolioProjects ?? []) {
+      if (!desiredPortfolioIds.has(item.id) && /^\d+$/.test(item.id)) {
+        await removePortfolioProject(persisted.id, item.id)
+      }
+    }
+    for (const item of desiredPortfolio) {
+      if (!item.title.trim()) continue
+      if (!/^\d+$/.test(item.id)) {
+        persisted = await addPortfolioProject(persisted.id, item)
+        continue
+      }
+      const previous = original?.portfolioProjects?.find((oldItem) => oldItem.id === item.id)
+      if (previous && JSON.stringify(previous) !== JSON.stringify(item)) {
+        persisted = await updatePortfolioProject(persisted.id, item)
       }
     }
 
@@ -200,7 +234,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   async function addProject(project: Project) {
     setError("")
     let persisted = await createProject(project, currentProfile)
-    for (const requirement of project.requirements.filter((item) => item.name.trim())) {
+    const uniqueRequirements = Array.from(new Map(project.requirements.filter((item) => item.name.trim()).map((item) => [item.name.trim().toLowerCase(), item])).values())
+    for (const requirement of uniqueRequirements) {
       persisted = await addRequiredSkill(persisted.id, requirement.name.trim(), requirement.minLevel)
     }
     setProjects((previous) => [persisted, ...previous.filter((item) => item.id !== persisted.id)])
@@ -217,7 +252,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    for (const requirement of project.requirements.filter((item) => item.name.trim())) {
+    const uniqueRequirements = Array.from(new Map(project.requirements.filter((item) => item.name.trim()).map((item) => [item.name.trim().toLowerCase(), item])).values())
+    for (const requirement of uniqueRequirements) {
       persisted = await addRequiredSkill(project.id, requirement.name.trim(), requirement.minLevel)
     }
 

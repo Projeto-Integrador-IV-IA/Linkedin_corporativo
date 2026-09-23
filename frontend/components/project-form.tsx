@@ -91,7 +91,7 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const cleaned = requirements.filter((r) => r.name.trim() !== "")
+    const cleaned = Array.from(new Map(requirements.filter((r) => r.name.trim() !== "").map((r) => [r.name.trim().toLowerCase(), { ...r, name: r.name.trim() }])).values())
     setSaving(true)
     setError("")
     try {

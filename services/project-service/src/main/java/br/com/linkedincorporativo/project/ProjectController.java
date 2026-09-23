@@ -99,7 +99,9 @@ public class ProjectController {
     public ResponseEntity<?> addRequiredSkill(@PathVariable Long id, @RequestBody RequiredSkillRequest request, @RequestAttribute(value = "currentUser", required = false) UserAccount currentUser) {
         return projects.findById(id).map(project -> {
             if (!canManage(project, currentUser)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Você só pode alterar seus próprios projetos."));
-            if (!blank(request.skillName())) project.getRequiredSkills().add(new RequiredSkill(project, request.skillName().trim(), defaultValue(request.requiredLevel(), "BASICO")));
+            if (!blank(request.skillName()) && project.getRequiredSkills().stream().noneMatch(skill -> skill.getSkillName() != null && skill.getSkillName().trim().equalsIgnoreCase(request.skillName().trim()))) {
+                project.getRequiredSkills().add(new RequiredSkill(project, request.skillName().trim(), defaultValue(request.requiredLevel(), "BASICO")));
+            }
             return ResponseEntity.ok(view(projects.save(project)));
         }).orElseGet(() -> ResponseEntity.notFound().build());
     }

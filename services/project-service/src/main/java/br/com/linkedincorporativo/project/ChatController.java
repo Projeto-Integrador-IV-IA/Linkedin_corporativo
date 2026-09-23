@@ -9,11 +9,23 @@ import br.com.linkedincorporativo.project.repository.ChatMessageRepository;
 import br.com.linkedincorporativo.project.repository.ConversationRepository;
 import br.com.linkedincorporativo.project.repository.ProjectRepository;
 import br.com.linkedincorporativo.project.repository.RecruiterNoteRepository;
+import br.com.linkedincorporativo.project.repository.UserAccountRepository;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.time.Instant;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,21 +35,36 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/chats")
 public class ChatController {
+    private static final long MAX_ATTACHMENT_SIZE = 5L * 1024L * 1024L;
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+        "application/pdf", "text/plain", "text/csv", "application/zip",
+        "image/png", "image/jpeg", "image/webp",
+        "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/wav", "audio/x-wav", "audio/aac", "audio/flac",
+        "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
     private final ConversationRepository conversations;
     private final ChatMessageRepository messages;
     private final RecruiterNoteRepository notes;
     private final ProjectRepository projects;
+    private final UserAccountRepository users;
+    private final Path uploadDirectory;
 
-    public ChatController(ConversationRepository conversations, ChatMessageRepository messages, RecruiterNoteRepository notes, ProjectRepository projects) {
+    public ChatController(ConversationRepository conversations, ChatMessageRepository messages, RecruiterNoteRepository notes, ProjectRepository projects, UserAccountRepository users,
+                          @Value("${chat.upload-dir:/app/uploads}") String uploadDir) {
         this.conversations = conversations;
         this.messages = messages;
         this.notes = notes;
         this.projects = projects;
+        this.users = users;
+        this.uploadDirectory = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
     @GetMapping
@@ -70,13 +97,82 @@ public class ChatController {
     @PostMapping("/{id}/messages")
     @Transactional
     public ResponseEntity<?> sendMessage(@PathVariable Long id, @RequestBody MessageRequest request, @RequestAttribute("currentUser") UserAccount user) {
+        return saveMessage(id, request == null ? null : request.content(), null, user);
+    }
+
+    @PostMapping(value = "/{id}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Transactional
+    public ResponseEntity<?> sendMessageWithAttachment(@PathVariable Long id,
+                                                       @RequestPart(value = "content", required = false) String content,
+                                                       @RequestPart(value = "file", required = false) MultipartFile file,
+                                                       @RequestAttribute("currentUser") UserAccount user) {
+        return saveMessage(id, content, file, user);
+    }
+
+    private ResponseEntity<?> saveMessage(Long id, String content, MultipartFile file, UserAccount user) {
         Conversation conversation = participant(id, user);
         if (conversation == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Você não participa desta conversa."));
-        if (request.content() == null || request.content().isBlank()) return ResponseEntity.badRequest().body(Map.of("message", "A mensagem não pode ficar vazia."));
+        boolean hasFile = file != null && !file.isEmpty();
+        if ((content == null || content.isBlank()) && !hasFile) return ResponseEntity.badRequest().body(Map.of("message", "Digite uma mensagem ou selecione um arquivo."));
+        if (hasFile && file.getSize() > MAX_ATTACHMENT_SIZE) return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of("message", "O arquivo deve ter no máximo 5 MB."));
+        String storedPath = null;
+        try {
+            if (hasFile) storedPath = storeAttachment(file);
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+        } catch (IOException exception) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Não foi possível armazenar o arquivo."));
+        }
         Conversation savedConversation = conversations.save(conversation);
-        ChatMessage savedMessage = messages.save(new ChatMessage(savedConversation, user.getId(), request.content().trim()));
+        ChatMessage savedMessage = new ChatMessage(savedConversation, user.getId(), content == null ? "" : content.trim());
+        if (hasFile) savedMessage.setAttachment(safeFileName(file.getOriginalFilename()), normalizedContentType(file.getContentType()), file.getSize(), storedPath);
+        savedMessage = messages.save(savedMessage);
         markRead(savedConversation, user);
         return ResponseEntity.ok(messageView(savedMessage));
+    }
+
+    @GetMapping("/{id}/messages/{messageId}/attachment")
+    public ResponseEntity<?> downloadAttachment(@PathVariable Long id, @PathVariable Long messageId, @RequestAttribute("currentUser") UserAccount user) {
+        Conversation conversation = participant(id, user);
+        if (conversation == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Você não participa desta conversa."));
+        ChatMessage message = messages.findById(messageId).filter(item -> item.getConversation().getId().equals(id)).orElse(null);
+        if (message == null || message.getAttachmentPath() == null) return ResponseEntity.notFound().build();
+        Path file = uploadDirectory.resolve(message.getAttachmentPath()).normalize();
+        if (!file.startsWith(uploadDirectory) || !Files.isRegularFile(file)) return ResponseEntity.notFound().build();
+        Resource resource = new FileSystemResource(file);
+        try {
+            MediaType mediaType = MediaType.parseMediaType(message.getAttachmentContentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : message.getAttachmentContentType());
+            return ResponseEntity.ok().contentType(mediaType).header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + safeFileName(message.getAttachmentName()) + "\"").contentLength(Files.size(file)).body(resource);
+        } catch (IOException | IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Não foi possível ler o arquivo."));
+        }
+    }
+
+    private String storeAttachment(MultipartFile file) throws IOException {
+        String contentType = normalizedContentType(file.getContentType());
+        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) throw new IllegalArgumentException("Tipo de arquivo não permitido.");
+        Files.createDirectories(uploadDirectory);
+        String extension = extension(file.getOriginalFilename());
+        String storedName = UUID.randomUUID() + extension;
+        Path target = uploadDirectory.resolve(storedName).normalize();
+        if (!target.startsWith(uploadDirectory)) throw new IllegalArgumentException("Nome de arquivo inválido.");
+        file.transferTo(target);
+        return storedName;
+    }
+
+    private static String normalizedContentType(String contentType) {
+        return contentType == null ? "application/octet-stream" : contentType.toLowerCase(Locale.ROOT).split(";", 2)[0].trim();
+    }
+
+    private static String extension(String name) {
+        String safe = safeFileName(name);
+        int dot = safe.lastIndexOf('.');
+        return dot >= 0 ? safe.substring(dot).toLowerCase(Locale.ROOT) : "";
+    }
+
+    private static String safeFileName(String name) {
+        String safe = name == null ? "arquivo" : Path.of(name).getFileName().toString().replaceAll("[^a-zA-Z0-9._-]", "_");
+        return safe.isBlank() ? "arquivo" : safe;
     }
 
     @GetMapping("/{id}/note")
@@ -125,16 +221,35 @@ public class ChatController {
             .filter(message -> !user.getId().equals(message.getSenderUserId()))
             .filter(message -> readAt == null || message.getCreatedAt().isAfter(readAt))
             .count();
-        return Map.of("id", conversation.getId(), "projectId", conversation.getProjectId(), "projectTitle", conversation.getProjectTitle(),
-            "recruiterUserId", conversation.getRecruiterUserId(), "professionalProfileId", conversation.getProfessionalProfileId(),
-            "professionalName", conversation.getProfessionalName() == null ? "Profissional" : conversation.getProfessionalName(),
-            "professionalEmail", conversation.getProfessionalEmail() == null ? "" : conversation.getProfessionalEmail(),
-            "updatedAt", conversation.getUpdatedAt().toString(), "unreadCount", unreadCount);
+        UserAccount recruiter = users.findById(conversation.getRecruiterUserId()).orElse(null);
+        String recruiterName = recruiter == null || recruiter.getDisplayName() == null || recruiter.getDisplayName().isBlank() ? "Recrutador" : recruiter.getDisplayName();
+        String recruiterProfileId = recruiter == null || recruiter.getProfileId() == null ? "" : recruiter.getProfileId().toString();
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("id", conversation.getId());
+        view.put("projectId", conversation.getProjectId());
+        view.put("projectTitle", conversation.getProjectTitle());
+        view.put("recruiterUserId", conversation.getRecruiterUserId());
+        view.put("recruiterName", recruiterName);
+        view.put("recruiterProfileId", recruiterProfileId);
+        view.put("professionalProfileId", conversation.getProfessionalProfileId());
+        view.put("professionalName", conversation.getProfessionalName() == null ? "Profissional" : conversation.getProfessionalName());
+        view.put("professionalEmail", conversation.getProfessionalEmail() == null ? "" : conversation.getProfessionalEmail());
+        view.put("updatedAt", conversation.getUpdatedAt().toString());
+        view.put("unreadCount", unreadCount);
+        return view;
     }
 
     private Map<String, Object> messageView(ChatMessage message) {
-        return Map.of("id", message.getId(), "conversationId", message.getConversation().getId(), "senderUserId", message.getSenderUserId(),
-            "content", message.getContent(), "createdAt", message.getCreatedAt().toString());
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("id", message.getId());
+        view.put("conversationId", message.getConversation().getId());
+        view.put("senderUserId", message.getSenderUserId());
+        view.put("content", message.getContent() == null ? "" : message.getContent());
+        view.put("createdAt", message.getCreatedAt().toString());
+        if (message.getAttachmentName() != null) {
+            view.put("attachment", Map.of("name", message.getAttachmentName(), "contentType", message.getAttachmentContentType(), "size", message.getAttachmentSize()));
+        }
+        return view;
     }
 
     private Map<String, Object> noteView(RecruiterNote note) {

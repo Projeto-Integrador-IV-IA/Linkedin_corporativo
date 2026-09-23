@@ -9,6 +9,14 @@ export interface Skill {
   level: SkillLevel
 }
 
+export interface PortfolioProject {
+  id: string
+  title: string
+  description: string
+  technologies: string
+  sourceProjectId?: string
+}
+
 export interface Profile {
   id: string
   avatarUrl?: string
@@ -17,6 +25,7 @@ export interface Profile {
   profession: string
   education: string
   projects: string
+  portfolioProjects?: PortfolioProject[]
   skills: Skill[]
 }
 

@@ -21,6 +21,7 @@ public class PortfolioProject {
     private String title;
     private String description;
     private String technologies;
+    private Long sourceProjectId;
 
     public PortfolioProject() {}
     public PortfolioProject(Profile profile, String title, String description, String technologies) {
@@ -36,4 +37,6 @@ public class PortfolioProject {
     public void setDescription(String value) { this.description = value; }
     public String getTechnologies() { return technologies; }
     public void setTechnologies(String value) { this.technologies = value; }
+    public Long getSourceProjectId() { return sourceProjectId; }
+    public void setSourceProjectId(Long value) { this.sourceProjectId = value; }
 }
