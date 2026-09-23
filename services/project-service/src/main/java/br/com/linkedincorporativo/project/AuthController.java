@@ -12,22 +12,40 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
     private final AuthService auth;
 
     public AuthController(AuthService auth) { this.auth = auth; }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Credentials request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(view(auth.register(request.email(), request.password(), request.displayName(), request.role())));
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED).body(view(auth.register(request.email(), request.password(), request.displayName(), request.role())));
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            log.error("Falha inesperada ao cadastrar usuário com e-mail {}", safeEmail(request), exception);
+            throw exception;
+        }
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Credentials request) {
-        return ResponseEntity.ok(view(auth.login(request.email(), request.password())));
+        try {
+            return ResponseEntity.ok(view(auth.login(request.email(), request.password())));
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            log.error("Falha inesperada ao autenticar usuário com e-mail {}", safeEmail(request), exception);
+            throw exception;
+        }
     }
 
     @GetMapping("/me")
@@ -58,6 +76,10 @@ public class AuthController {
 
     private String text(String value) {
         return value == null ? "" : value;
+    }
+
+    private String safeEmail(Credentials request) {
+        return request == null || request.email() == null ? "<vazio>" : request.email().trim();
     }
 
     public record Credentials(String email, String password, String displayName, String role) {}

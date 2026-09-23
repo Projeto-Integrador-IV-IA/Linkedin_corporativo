@@ -16,12 +16,16 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api")
 @CrossOrigin(origins = "*")
 public class ApiProxyController {
+    private static final Logger log = LoggerFactory.getLogger(ApiProxyController.class);
     private final RestClient client = RestClient.create();
     private final String profileUrl;
     private final String projectUrl;
@@ -77,24 +81,37 @@ public class ApiProxyController {
 
     private ResponseEntity<Object> get(String url, String auth) {
         try { return client.get().uri(url).headers(headers -> addAuth(headers, auth)).retrieve().toEntity(Object.class); }
-        catch (RestClientResponseException exception) { return error(exception); }
+        catch (RestClientResponseException exception) { return error(exception, url); }
+        catch (RestClientException exception) { return unavailable(exception, url); }
     }
     private ResponseEntity<Object> post(String url, Object body, String auth) {
         try { return client.post().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class); }
-        catch (RestClientResponseException exception) { return error(exception); }
+        catch (RestClientResponseException exception) { return error(exception, url); }
+        catch (RestClientException exception) { return unavailable(exception, url); }
     }
     private ResponseEntity<Object> put(String url, Object body, String auth) {
         try { return client.put().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class); }
-        catch (RestClientResponseException exception) { return error(exception); }
+        catch (RestClientResponseException exception) { return error(exception, url); }
+        catch (RestClientException exception) { return unavailable(exception, url); }
     }
     private ResponseEntity<Object> patch(String url, Object body, String auth) {
         try { return client.patch().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class); }
-        catch (RestClientResponseException exception) { return error(exception); }
+        catch (RestClientResponseException exception) { return error(exception, url); }
+        catch (RestClientException exception) { return unavailable(exception, url); }
     }
     private ResponseEntity<Object> delete(String url, String auth) {
         try { return client.delete().uri(url).headers(headers -> addAuth(headers, auth)).retrieve().toEntity(Object.class); }
-        catch (RestClientResponseException exception) { return error(exception); }
+        catch (RestClientResponseException exception) { return error(exception, url); }
+        catch (RestClientException exception) { return unavailable(exception, url); }
     }
     private static void addAuth(HttpHeaders headers, String auth) { if (auth != null && !auth.isBlank()) headers.set("Authorization", auth); }
-    private ResponseEntity<Object> error(RestClientResponseException exception) { return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", exception.getResponseBodyAsString())); }
+    private ResponseEntity<Object> error(RestClientResponseException exception, String url) {
+        log.error("Serviço downstream respondeu {} para {}", exception.getStatusCode().value(), url);
+        return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", exception.getResponseBodyAsString()));
+    }
+
+    private ResponseEntity<Object> unavailable(RestClientException exception, String url) {
+        log.error("Não foi possível acessar o serviço downstream em {}", url, exception);
+        return ResponseEntity.status(502).body(Map.of("message", "Serviço temporariamente indisponível."));
+    }
 }
