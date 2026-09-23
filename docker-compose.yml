@@ -30,6 +30,20 @@ services:
     networks:
       - linkedin-internal
 
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - linkedin-internal
+
   profile-service:
     build:
       context: .
@@ -45,11 +59,15 @@ services:
       PROFILE_DB_NAME: ${POSTGRES_PROFILE_DB}
       PROFILE_DB_USER: ${POSTGRES_PROFILE_USER}
       PROFILE_DB_PASSWORD: ${POSTGRES_PROFILE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT}
     expose:
       - "${PROFILE_SERVICE_PORT}"
     depends_on:
       profile-db:
         condition: service_healthy
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${PROFILE_SERVICE_PORT}/actuator/health | grep -q UP"]
       interval: 10s
@@ -128,12 +146,13 @@ services:
 
   ml-engine:
     build:
-      context: services/ml-engine
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ml-engine/Dockerfile
     env_file:
       - .env
     environment:
       PORT: ${ML_ENGINE_PORT}
+      MODEL_PATH: /app/models/job_ranker.joblib
     expose:
       - "${ML_ENGINE_PORT}"
     healthcheck:
@@ -142,6 +161,19 @@ services:
       timeout: 5s
       retries: 6
       start_period: 15s
+    networks:
+      - linkedin-internal
+
+  redis:
+    image: redis:${REDIS_VERSION}
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     networks:
       - linkedin-internal
 
@@ -204,3 +236,4 @@ volumes:
   profile-db-data:
   project-db-data:
   match-db-data:
+  redis-data:

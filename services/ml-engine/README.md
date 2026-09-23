@@ -1,29 +1,42 @@
 # ML Engine
 
-Serviço Python/FastAPI responsável somente por carregar um modelo e executar inferência.
+Serviço FastAPI responsável somente pela inferência do modelo de ranking. O
+treinamento e a geração do artefato ficam em [`../../ml/README.md`](../../ml/README.md).
 
-O treinamento, a geração do dataset e a avaliação ficam em [`../../ml/README.md`](../../ml/README.md). Não colocar notebooks ou scripts de treinamento dentro da imagem de produção do serviço.
+## Execução
 
-## Contrato
+No Compose, o serviço escuta internamente na porta `8000` e carrega o artefato
+montado em `/app/models/job_ranker.joblib`.
 
-O contrato inicial está em [`../../contracts/openapi/ml-engine.yaml`](../../contracts/openapi/ml-engine.yaml). O endpoint de predição deve receber múltiplos candidatos, retornar resultados ordenados e usar score de `0` a `100`.
+Endpoints principais:
 
-## Execução local
-
-```bash
-cd services/ml-engine
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+```http
+GET  /health
+POST /predict
 ```
 
-Dentro do Compose, o serviço é acessado por `http://ml-engine:8000` e não possui porta publicada no host por padrão.
+O contrato da requisição e da resposta está em
+[`../../contracts/openapi/ml-engine.yaml`](../../contracts/openapi/ml-engine.yaml).
 
-## Regras
+## Comportamento do modelo
 
-- Manter o healthcheck em `/health`.
-- Validar payloads com modelos Pydantic.
-- Não acessar os bancos PostgreSQL diretamente.
-- Não colocar credenciais ou modelos grandes no Git sem decisão documentada.
-- Adicionar testes para cada alteração do contrato de predição.
+Na inicialização, o serviço carrega o `XGBRanker`, o transformador TF-IDF, o
+calibrador e os metadados salvos no artefato. `/predict` recebe candidatos e a
+vaga, calcula as features e devolve scores ordenáveis.
+
+O score exibido pelo produto é uma porcentagem calibrada relacionada à
+probabilidade histórica de candidatura. Não representa probabilidade de
+contratação ou decisão automática de RH.
+
+Se o artefato estiver ausente ou não puder ser lido, o serviço usa o fallback
+determinístico implementado para o desenvolvimento e informa o estado no
+healthcheck. Isso não substitui a publicação do modelo em produção.
+
+## Separação de responsabilidades
+
+- `ml/`: dataset, engenharia de atributos, treinamento e avaliação;
+- `services/ml-engine/`: API online, validação do payload e carregamento;
+- `match-orchestrator`: integração com perfil/projeto e ordenação da resposta.
+
+O endpoint não deve treinar modelo, acessar banco de negócio ou importar
+entidades Java.

@@ -19,6 +19,10 @@ paths:
                   status:
                     type: string
                     example: UP
+                  model_loaded:
+                    type: boolean
+                    description: Indica se o artefato job_ranker.joblib foi carregado.
+                    example: true
   /predict:
     post:
       operationId: predict
@@ -49,6 +53,11 @@ components:
           type: array
           items:
             type: string
+        profession:
+          type: string
+        years_experience:
+          type: integer
+          minimum: 0
     MatchRequest:
       type: object
       required: [candidates, required_skills]
@@ -61,6 +70,8 @@ components:
           type: array
           items:
             type: string
+        required_title:
+          type: string
     MatchResult:
       type: object
       required: [candidate_id, score, matched_skills, skill_gaps]

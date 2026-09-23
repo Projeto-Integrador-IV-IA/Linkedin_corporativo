@@ -34,8 +34,14 @@ ml/data/raw/*
 !ml/data/raw/.gitkeep
 ml/data/processed/*
 !ml/data/processed/.gitkeep
+ml/data/job-recommendation/*
+!ml/data/job-recommendation/.gitkeep
 ml/models/*
 !ml/models/.gitkeep
+!ml/models/job_ranker.joblib
+frontend/Grupo2.zip
+ml/data/job-recommendation/
 
 # Overrides locais do Compose
 docker-compose.override.yml
+ml/data/job-recommendation/

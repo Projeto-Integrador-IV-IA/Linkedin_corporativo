@@ -7,8 +7,18 @@ spring:
     password: ${PROFILE_DB_PASSWORD:profile_password}
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: 500ms
+      connect-timeout: 500ms
+      lettuce:
+        shutdown-timeout: 100ms
+  cache:
+    type: redis
 
 server:
   port: ${SERVER_PORT:8081}

@@ -10,12 +10,14 @@ WORKDIR /app
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser
 
-COPY requirements.txt ./requirements.txt
+COPY services/ml-engine/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY services/ml-engine/app ./app
+COPY ml/models /app/models
 
 EXPOSE 8000
+RUN chown -R appuser:appuser /app
 USER appuser
 
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]

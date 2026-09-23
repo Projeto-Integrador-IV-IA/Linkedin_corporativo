@@ -1,31 +1,70 @@
-# Equipe de Docker e infraestrutura
+# Docker e infraestrutura local
 
-## Responsabilidade
+O arquivo [`../docker-compose.yml`](../docker-compose.yml) é a forma oficial
+de executar o MVP completo.
 
-Manter a execução local reproduzível, a rede interna, os healthchecks, os volumes e as imagens dos serviços.
+Para publicar no servidor com domínio e HTTPS, consulte o guia
+[`../docs/deploy-dokploy.md`](../docs/deploy-dokploy.md).
 
-O arquivo principal é [`../docker-compose.yml`](../docker-compose.yml). Ele deve continuar sendo a forma oficial de subir o ambiente:
+## Subida do ambiente
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 
-## Regras do Compose
+Serviços do Compose:
 
-- Publicar no host somente portas necessárias ao usuário, inicialmente o API Gateway em `8080`.
-- Usar nomes de serviço para comunicação interna.
-- Adicionar `depends_on` com healthcheck quando houver dependência de inicialização.
-- Não colocar segredos diretamente no YAML.
-- Usar `.env.example` para documentar variáveis obrigatórias.
-- Cada banco deve ter volume e credenciais próprias.
-- Serviços opcionais, como n8n, devem usar profiles e não bloquear o MVP.
+- `frontend`: Next.js, publicado em `3000`;
+- `api-gateway`: entrada pública, publicado em `8080`;
+- `profile-service` + `profile-db`;
+- `project-service` + `project-db`;
+- `match-orchestrator` + `match-db`;
+- `ml-engine`;
+- `redis`, com volume `redis-data`.
 
-Para depuração direta, copie [`../docker-compose.override.yml.example`](../docker-compose.override.yml.example) para `docker-compose.override.yml`. Esse override não deve ser commitado.
+Somente frontend e Gateway precisam ser acessados pelo host. Os serviços,
+PostgreSQL e Redis usam a rede interna do Compose.
 
-## Dockerfiles
+## Healthchecks
 
-- `docker/java/Dockerfile`: imagem compartilhada para os microsserviços Java;
-- `services/ml-engine/Dockerfile`: imagem do runtime Python de inferência;
-- o frontend terá Dockerfile próprio quando o framework for escolhido.
+```bash
+docker compose ps
+curl http://localhost:8080/actuator/health
+curl http://localhost:8080/health/dependencies
+```
 
-Alterações no Compose ou em Dockerfiles devem incluir o comando de validação e o resultado de `docker compose ps` na PR.
+Os containers de domínio possuem healthchecks e o Gateway expõe a situação das
+dependências. O Redis tem healthcheck próprio e o Profile Service o utiliza
+como cache opcional.
+
+## Dados e variáveis
+
+As variáveis obrigatórias estão em [`.env.example`](../.env.example). O arquivo
+`.env` local não deve ser commitado. Cada banco possui credencial e volume
+próprios; o Redis mantém dados em `redis-data`, mas esses dados podem ser
+reconstruídos a partir do PostgreSQL.
+
+Para parar preservando os dados:
+
+```bash
+docker compose down
+```
+
+`docker compose down -v` remove os volumes e apaga os bancos locais. Use-o
+somente quando realmente precisar reinicializar o ambiente de desenvolvimento.
+
+## Imagens
+
+- `docker/java/Dockerfile`: base compartilhada dos serviços Java;
+- `services/ml-engine/Dockerfile`: runtime Python da inferência;
+- `frontend/Dockerfile`: build multi-stage do Next.js.
+
+Para validar a configuração sem iniciar containers:
+
+```bash
+docker compose config --quiet
+```
+
+Em mudanças de Compose ou Dockerfile, registre na PR o resultado desse comando
+e de `docker compose ps`.

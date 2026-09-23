@@ -7,7 +7,7 @@ spring:
     password: ${PROJECT_DB_PASSWORD:project_password}
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     open-in-view: false
 
 server:
