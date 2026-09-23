@@ -42,7 +42,15 @@ public class AuthService {
     public UserAccount login(String email, String password) {
         UserAccount user = users.findByEmailIgnoreCase(email == null ? "" : email.trim())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos."));
-        if (!encoder.matches(password == null ? "" : password, user.getPasswordHash())) {
+        boolean passwordMatches;
+        try {
+            passwordMatches = user.getPasswordHash() != null
+                && encoder.matches(password == null ? "" : password, user.getPasswordHash());
+        } catch (IllegalArgumentException exception) {
+            // Contas antigas com hash inválido não devem provocar erro 500.
+            passwordMatches = false;
+        }
+        if (!passwordMatches) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos.");
         }
         return issueToken(user);

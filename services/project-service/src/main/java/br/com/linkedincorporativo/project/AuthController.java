@@ -48,12 +48,16 @@ public class AuthController {
     private Map<String, Object> view(UserAccount user) {
         return Map.of(
             "id", user.getId(),
-            "email", user.getEmail(),
-            "displayName", user.getDisplayName(),
-            "role", user.getRole(),
+            "email", text(user.getEmail()),
+            "displayName", text(user.getDisplayName()),
+            "role", text(user.getRole()),
             "profileId", user.getProfileId() == null ? "" : user.getProfileId(),
-            "token", user.getSessionToken() == null ? "" : user.getSessionToken()
+            "token", text(user.getSessionToken())
         );
+    }
+
+    private String text(String value) {
+        return value == null ? "" : value;
     }
 
     public record Credentials(String email, String password, String displayName, String role) {}
