@@ -38,11 +38,6 @@ public class MatchOrchestratorApplication {
         return Map.of("service", serviceName, "status", "UP");
     }
 
-    @GetMapping("/api/matches/ping")
-    public Map<String, String> ping() {
-        return Map.of("service", serviceName, "message", "pong");
-    }
-
     @GetMapping("/health/dependencies")
     public Map<String, String> dependencyHealth() {
         Map<String, String> health = new LinkedHashMap<>();
