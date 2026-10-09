@@ -8,7 +8,6 @@ import br.com.linkedincorporativo.project.repository.ProjectRepository;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -80,12 +79,9 @@ public class CandidateDecisionController {
         try {
             String endpoint = profileUrl + "/api/profiles/" + profileId + "/portfolio";
             if ("ACEITO".equals(status)) {
-                String technologies = project.getRequiredSkills().stream()
-                    .map(skill -> skill.getSkillName() + " (" + skill.getRequiredLevel() + ")")
-                    .collect(Collectors.joining(", "));
                 profileClient.post().uri(endpoint)
                     .body(Map.of("sourceProjectId", project.getId(), "title", project.getTitle(),
-                        "description", project.getDescription() == null ? "" : project.getDescription(), "technologies", technologies))
+                        "description", project.getDescription() == null ? "" : project.getDescription()))
                     .retrieve().toBodilessEntity();
             } else if ("ACEITO".equals(previousStatus)) {
                 profileClient.delete().uri(endpoint + "/source-project/" + project.getId())

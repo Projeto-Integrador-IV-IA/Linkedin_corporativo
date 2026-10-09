@@ -1,10 +1,9 @@
 "use client"
 
-import { ArrowLeft, Pencil } from "lucide-react"
+import { ArrowLeft, Pencil, Users } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
 import { MatchDashboard } from "@/components/match-dashboard"
-import { SkillLevelBadge } from "@/components/skill-level-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -53,21 +52,16 @@ export function ProjectDetail({ projectId, onBack, onEdit }: ProjectDetailProps)
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div>
-            <p className="mb-2 text-sm font-medium">Skills exigidas</p>
-            <div className="flex flex-wrap gap-1.5">
-              {project.requirements.length === 0 ? (
-                <span className="text-sm text-muted-foreground">Nenhuma skill exigida.</span>
-              ) : project.requirements.map((requirement) => (
-                <SkillLevelBadge key={requirement.id} level={requirement.minLevel} label={requirement.name} />
-              ))}
-            </div>
-          </div>
           {project.ownerName && (
             <p className="text-sm text-muted-foreground">
               Responsável: <span className="text-foreground">{project.ownerName}</span>
             </p>
           )}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="size-4" />
+            <strong className="text-foreground">{project.interestedCount ?? 0}</strong>
+            {(project.interestedCount ?? 0) === 1 ? "profissional demonstrou interesse" : "profissionais demonstraram interesse"}
+          </div>
         </CardContent>
       </Card>
 

@@ -9,7 +9,7 @@ e um API Gateway. Cada serviço possui código, configuração e banco próprios
 |---|---:|---|
 | `api-gateway` | 8080 | entrada pública, CORS, proxy e healthcheck de dependências |
 | `profile-service` | 8081 | perfis, avatar, skills e portfólio |
-| `project-service` | 8082 | contas, autenticação, projetos, decisões, conversas, mensagens e notas |
+| `project-service` | 8082 | contas, autenticação, projetos, assistente LLM, telemetria, decisões, conversas, mensagens e notas |
 | `match-orchestrator` | 8083 | consulta dados de domínio, chama o ML Engine e monta recomendações |
 | `ml-engine` | 8000 | carrega o modelo e executa a inferência de ranking |
 
@@ -23,6 +23,10 @@ O Project Service mantém usuários e tokens de sessão no `project-db`. O Gatew
 encaminha o Bearer token, e o interceptor do Project Service identifica o
 usuário da requisição. Operações de projeto verificam o proprietário antes de
 ler ou alterar os dados.
+
+A conta administrativa é provisionada por variáveis de ambiente e não pode ser
+criada pela rota pública. A telemetria das chamadas LLM guarda contagens de
+tokens, provedor/modelo, contexto, latência e resultado, sem persistir prompts.
 
 O MVP aplica a regra de isolamento por proprietário: um recrutador só gerencia
 seus próprios projetos, decisões e conversas participantes. As notas são

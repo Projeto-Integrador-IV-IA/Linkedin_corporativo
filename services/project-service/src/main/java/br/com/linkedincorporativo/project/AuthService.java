@@ -3,6 +3,7 @@ package br.com.linkedincorporativo.project;
 import br.com.linkedincorporativo.project.domain.UserAccount;
 import br.com.linkedincorporativo.project.repository.UserAccountRepository;
 import java.util.UUID;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -10,6 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AuthService {
+    private static final Set<String> ROLES = Set.of("RECRUITER", "CANDIDATE");
     private final UserAccountRepository users;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
@@ -31,11 +33,15 @@ public class AuthService {
         if (users.findByEmailIgnoreCase(email.trim()).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Este e-mail já possui uma conta.");
         }
+        String normalizedRole = role == null || role.isBlank() ? "CANDIDATE" : role.trim().toUpperCase();
+        if (!ROLES.contains(normalizedRole)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O tipo de conta deve ser RECRUITER ou CANDIDATE.");
+        }
         UserAccount user = new UserAccount();
         user.setEmail(email.trim().toLowerCase());
         user.setPasswordHash(encoder.encode(password));
         user.setDisplayName(displayName == null || displayName.isBlank() ? email.trim() : displayName.trim());
-        user.setRole(role == null || role.isBlank() ? "RECRUITER" : role.trim().toUpperCase());
+        user.setRole(normalizedRole);
         return issueToken(users.save(user));
     }
 
@@ -46,6 +52,11 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos.");
         }
         return issueToken(user);
+    }
+
+    public UserAccount linkProfile(UserAccount user, Long profileId) {
+        user.setProfileId(profileId);
+        return users.save(user);
     }
 
     private UserAccount issueToken(UserAccount user) {

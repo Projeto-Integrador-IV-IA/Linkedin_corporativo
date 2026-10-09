@@ -1,7 +1,12 @@
 package br.com.linkedincorporativo.match;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.nio.charset.StandardCharsets;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -29,6 +34,7 @@ public class MatchController {
     private final String profileUrl;
     private final String projectUrl;
     private final String mlUrl;
+    private final double interestBoostPoints;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
         .version(HttpClient.Version.HTTP_1_1)
@@ -37,11 +43,13 @@ public class MatchController {
     public MatchController(
         @Value("${services.profile-url}") String profileUrl,
         @Value("${services.project-url}") String projectUrl,
-        @Value("${services.ml-engine-url}") String mlUrl
+        @Value("${services.ml-engine-url}") String mlUrl,
+        @Value("${matching.interest-boost-points:10}") double interestBoostPoints
     ) {
         this.profileUrl = profileUrl;
         this.projectUrl = projectUrl;
         this.mlUrl = mlUrl;
+        this.interestBoostPoints = Math.max(0, interestBoostPoints);
     }
 
     @GetMapping("/projects/{projectId}")
@@ -52,19 +60,14 @@ public class MatchController {
         List<Map<String, Object>> profiles = client.get().uri(profileUrl + "/api/profiles")
             .retrieve().body(new ParameterizedTypeReference<>() {});
 
-        List<Map<String, Object>> requiredSkills = listOfMaps(project.get("requiredSkills"));
-        List<String> required = requiredSkills.stream().map(skill -> stringValue(skill.get("skillName"))).toList();
         List<Map<String, Object>> candidates = profiles.stream().map(profile -> Map.<String, Object>of(
             "candidate_id", String.valueOf(profile.get("id")),
-            "skills", listOfMaps(profile.get("skills")).stream().map(skill -> stringValue(skill.get("skillName"))).toList(),
-            "profession", stringValue(profile.get("profession")),
-            "years_experience", numberValue(profile.get("yearsOfExperience"))
+            "profile_description", profileDescription(profile)
         )).toList();
 
         Map<String, Object> request = Map.of(
             "candidates", candidates,
-            "required_skills", required,
-            "required_title", stringValue(project.get("title"))
+            "project_description", stringValue(project.get("description"))
         );
         byte[] requestBody = objectMapper.writeValueAsString(request).getBytes(StandardCharsets.UTF_8);
         HttpRequest mlRequest = HttpRequest.newBuilder(URI.create(mlUrl + "/predict"))
@@ -77,8 +80,32 @@ public class MatchController {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_GATEWAY, mlResponse.body());
         }
         Map<String, Object> prediction = objectMapper.readValue(mlResponse.body(), new TypeReference<>() {});
+        Set<String> interestedProfiles = new HashSet<>();
+        for (Map<String, Object> application : listOfMaps(project.get("applications"))) {
+            if (!"INTERESSADO".equalsIgnoreCase(stringValue(application.get("status")))) continue;
+            String profileId = stringValue(application.get("profileId"));
+            if (!profileId.isBlank()) interestedProfiles.add(profileId);
+        }
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (Map<String, Object> raw : listOfMaps(prediction == null ? null : prediction.get("results"))) {
+            String candidateId = stringValue(raw.get("candidate_id"));
+            double textScore = numberValue(raw.get("score"));
+            boolean interested = interestedProfiles.contains(candidateId);
+            double appliedBoost = interested ? interestBoostPoints : 0;
+            double finalScore = Math.min(100, textScore + appliedBoost);
+            Map<String, Object> ranked = new LinkedHashMap<>();
+            ranked.put("candidate_id", candidateId);
+            ranked.put("score", round(finalScore));
+            ranked.put("text_score", round(textScore));
+            ranked.put("interest_boost", round(appliedBoost));
+            ranked.put("interested", interested);
+            results.add(ranked);
+        }
+        results.sort(Comparator
+            .comparingDouble((Map<String, Object> result) -> numberValue(result.get("score"))).reversed()
+            .thenComparing(result -> stringValue(result.get("candidate_id"))));
         return ResponseEntity.ok(Map.of("projectId", projectId, "projectTitle", stringValue(project.get("title")),
-            "results", prediction == null ? List.of() : prediction.getOrDefault("results", List.of())));
+            "interestBoostPoints", round(interestBoostPoints), "results", results));
     }
 
     @SuppressWarnings("unchecked")
@@ -86,7 +113,18 @@ public class MatchController {
         return value instanceof List<?> list ? (List<Map<String, Object>>) (List<?>) list : List.of();
     }
     private static String stringValue(Object value) { return value == null ? "" : String.valueOf(value); }
-    private static int numberValue(Object value) {
-        return value instanceof Number number ? number.intValue() : 0;
+    private static double numberValue(Object value) {
+        if (value instanceof Number number) return number.doubleValue();
+        try { return Double.parseDouble(stringValue(value)); }
+        catch (NumberFormatException ignored) { return 0; }
+    }
+    private static double round(double value) { return Math.round(value * 100.0) / 100.0; }
+    private static String profileDescription(Map<String, Object> profile) {
+        String bio = stringValue(profile.get("bio"));
+        String portfolio = listOfMaps(profile.get("portfolioProjects")).stream()
+            .map(item -> stringValue(item.get("description")))
+            .filter(value -> !value.isBlank())
+            .reduce("", (left, right) -> left.isBlank() ? right : left + "\n\n" + right);
+        return bio.isBlank() ? portfolio : portfolio.isBlank() ? bio : bio + "\n\n" + portfolio;
     }
 }

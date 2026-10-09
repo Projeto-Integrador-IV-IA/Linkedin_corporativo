@@ -2,6 +2,10 @@
 
 Plataforma de matching interno entre colaboradores e vagas/projetos, com recomendação assistida por Machine Learning.
 
+O projeto também oferece escrita assistida por LLM nas descrições de vagas,
+perfil profissional e projetos do portfólio. O provedor pode ser Gemini ou
+NVIDIA e é configurado somente no backend.
+
 O repositório usa uma arquitetura monorepo: cada equipe trabalha em uma área própria, e a integração acontece por APIs documentadas em `contracts/`.
 
 ## Arquitetura
@@ -32,7 +36,7 @@ O frontend deve acessar apenas o API Gateway. Os demais serviços conversam pela
 ├── frontend/                 # aplicação web do gestor e colaborador
 ├── services/
 │   ├── api-gateway/          # entrada pública da aplicação
-│   ├── profile-service/      # perfis, skills e experiências
+│   ├── profile-service/      # perfis, descrições e portfólio
 │   ├── project-service/      # projetos, vagas e requisitos
 │   ├── match-orchestrator/   # orquestração do fluxo de matching
 │   └── ml-engine/            # inferência Python/FastAPI
@@ -73,10 +77,24 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Antes de usar o assistente, configure em `.env` `LLM_PROVIDER`, `LLM_API_KEY` e
+`LLM_MODEL`. Use `LLM_PROVIDER=mock` apenas para desenvolver a interface sem
+consumir uma API externa.
+
+Para habilitar o painel administrativo, defina `ADMIN_EMAIL` e uma
+`ADMIN_PASSWORD` com pelo menos oito caracteres. `LLM_INPUT_COST_PER_MILLION`
+e `LLM_OUTPUT_COST_PER_MILLION` alimentam as estimativas em USD e podem
+permanecer em zero enquanto o uso estiver na cota gratuita. A conta `ADMIN` é provisionada
+na inicialização e não aparece como opção no cadastro público.
+
+`MATCH_INTEREST_BOOST_POINTS` define quantos pontos o interesse declarado
+acrescenta ao score textual no Match Orchestrator. O padrão local é 10 e o
+score final permanece limitado a 100.
+
 Após a subida do ambiente, acesse a aplicação em `http://localhost:3000`. O
 frontend usa o API Gateway em `http://localhost:8080`; os serviços internos e
 os bancos PostgreSQL e o Redis permanecem na rede do Compose. Na primeira
-execução, crie uma conta pela tela de login; não existem credenciais padrão.
+execução, crie contas profissionais e de recrutador pela tela de login.
 
 Verificar o ambiente:
 
@@ -115,7 +133,7 @@ O MVP atual sobe todos os serviços essenciais com um único comando:
 - Project Service e `project-db`;
 - Match Orchestrator e `match-db`;
 - ML Engine;
-- Redis, usado como cache de perfis e skills.
+- Redis, usado como cache de perfis.
 
 O Redis tem volume persistente, TTL de 60 segundos e fallback para o
 PostgreSQL quando estiver indisponível. Os dados de negócio continuam nos

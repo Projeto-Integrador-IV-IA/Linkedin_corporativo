@@ -6,9 +6,13 @@ spring:
     username: ${PROFILE_DB_USER:profile_user}
     password: ${PROFILE_DB_PASSWORD:profile_password}
   jpa:
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: update
     open-in-view: false
+  sql:
+    init:
+      mode: always
   data:
     redis:
       host: ${REDIS_HOST:redis}

@@ -1,16 +1,8 @@
-import type { MatchResult, PortfolioProject, Profile, Project, SkillLevel } from "./types"
+import type { MatchResult, PortfolioProject, Profile, Project } from "./types"
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api"
 ).replace(/\/$/, "")
-
-type RemoteSkill = {
-  id: number
-  skillId?: number
-  skillName?: string
-  name?: string
-  proficiencyLevel?: string
-}
 
 type RemoteProfile = {
   id: number
@@ -21,15 +13,32 @@ type RemoteProfile = {
   educationLevel?: string
   yearsOfExperience?: number
   bio?: string
-  skills?: RemoteSkill[]
-  portfolioProjects?: { id?: number; sourceProjectId?: number | string; title?: string; description?: string; technologies?: string }[]
+  portfolioProjects?: { id?: number; sourceProjectId?: number | string; title?: string; description?: string }[]
 }
 
 type RemoteProject = {
   id: number
   title: string
   description?: string
-  requiredSkills?: { id: number; skillName: string; requiredLevel?: string }[]
+  area?: string
+  ownerName?: string
+  ownerAvatarUrl?: string
+  ownerEmail?: string
+  status?: string
+  interestedCount?: number
+}
+
+function errorMessage(body: string, fallback: string) {
+  if (!body.trim()) return fallback
+  try {
+    const parsed: unknown = JSON.parse(body)
+    if (parsed && typeof parsed === "object" && "message" in parsed && typeof parsed.message === "string") {
+      return parsed.message
+    }
+  } catch {
+    // Respostas não JSON continuam exibindo o texto retornado pelo serviço.
+  }
+  return body
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -49,24 +58,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.text()
-    throw new Error(body || `Erro ${response.status} ao acessar a API.`)
+    throw new Error(errorMessage(body, `Erro ${response.status} ao acessar a API.`))
   }
 
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
-}
-
-function levelFromApi(value?: string): SkillLevel {
-  const normalized = (value ?? "").toUpperCase()
-  if (normalized === "AVANCADO" || normalized === "ESPECIALISTA") return "Avançado"
-  if (normalized === "INTERMEDIARIO") return "Intermediário"
-  return "Básico"
-}
-
-function levelToApi(value: SkillLevel) {
-  if (value === "Avançado") return "AVANCADO"
-  if (value === "Intermediário") return "INTERMEDIARIO"
-  return "BASICO"
 }
 
 export function mapProfile(profile: RemoteProfile): Profile {
@@ -77,22 +73,12 @@ export function mapProfile(profile: RemoteProfile): Profile {
     name: profile.fullName ?? "",
     profession: profile.profession ?? "",
     education: profile.educationLevel ?? "",
-    projects:
-      ((profile.portfolioProjects ?? [])
-        .map((project) => [project.title, project.description].filter(Boolean).join(" — "))
-        .join("\n") || profile.bio || ""),
+    projects: profile.bio ?? "",
     portfolioProjects: (profile.portfolioProjects ?? []).map((project) => ({
       id: String(project.id),
       sourceProjectId: project.sourceProjectId ? String(project.sourceProjectId) : undefined,
       title: project.title ?? "",
       description: project.description ?? "",
-      technologies: project.technologies ?? "",
-    })),
-    skills: (profile.skills ?? []).map((skill) => ({
-      id: String(skill.id ?? skill.skillId),
-      skillId: String(skill.skillId ?? skill.id),
-      name: skill.skillName ?? skill.name ?? "",
-      level: levelFromApi(skill.proficiencyLevel),
     })),
   }
 }
@@ -102,15 +88,12 @@ export function mapProject(project: RemoteProject): Project {
     id: String(project.id),
     title: project.title ?? "",
     description: project.description ?? "",
-    requirements: (project.requiredSkills ?? []).map((skill) => ({
-      id: String(skill.id),
-      name: skill.skillName,
-      minLevel: levelFromApi(skill.requiredLevel),
-    })),
-    area: (project as RemoteProject & { area?: string }).area ?? "",
-    ownerName: (project as RemoteProject & { ownerName?: string }).ownerName ?? "",
-    ownerEmail: (project as RemoteProject & { ownerEmail?: string }).ownerEmail ?? "",
-    status: (project as RemoteProject & { status?: string }).status ?? "ABERTO",
+    area: project.area ?? "",
+    ownerName: project.ownerName ?? "",
+    ownerAvatarUrl: project.ownerAvatarUrl ?? "",
+    ownerEmail: project.ownerEmail ?? "",
+    status: project.status ?? "ABERTO",
+    interestedCount: Number(project.interestedCount ?? 0),
   }
 }
 
@@ -178,39 +161,126 @@ export function updateProject(project: Project, owner: Profile) {
   }).then(mapProject)
 }
 
-export function addRequiredSkill(projectId: string, name: string, level: SkillLevel) {
-  return request<RemoteProject>(`/projects/${projectId}/required-skills`, {
-    method: "POST",
-    body: JSON.stringify({ skillName: name, requiredLevel: levelToApi(level) }),
-  }).then(mapProject)
-}
-
-export function removeRequiredSkill(projectId: string, skillId: string) {
-  return request<void>(`/projects/${projectId}/required-skills/${skillId}`, { method: "DELETE" })
-}
-
 export function listRecommendations(projectId: string) {
   return request<{
-    results: { candidate_id: string; score: number; matched_skills?: string[]; skill_gaps?: string[] }[]
+    interestBoostPoints: number
+    results: { candidate_id: string; score: number; text_score: number; interest_boost: number; interested: boolean }[]
   }>(`/matches/projects/${projectId}`)
 }
 
-export function listSkills() {
-  return request<{ id: number; name: string }[]>("/skills")
+export interface FeedProject extends Project {
+  interested: boolean
+  interestedCount: number
 }
 
-export function createSkill(name: string) {
-  return request<{ id: number; name: string }>("/skills", {
+function mapFeedProject(project: RemoteProject & { interested?: boolean }): FeedProject {
+  return {
+    ...mapProject(project),
+    interested: Boolean(project.interested),
+    interestedCount: Number(project.interestedCount ?? 0),
+  }
+}
+
+export function listFeedProjects() {
+  return request<(RemoteProject & { interested?: boolean })[]>("/feed/projects").then((projects) => projects.map(mapFeedProject))
+}
+
+export function expressProjectInterest(projectId: string) {
+  return request<RemoteProject & { interested?: boolean }>(`/feed/projects/${projectId}/interest`, { method: "POST" }).then(mapFeedProject)
+}
+
+export function withdrawProjectInterest(projectId: string) {
+  return request<RemoteProject & { interested?: boolean }>(`/feed/projects/${projectId}/interest`, { method: "DELETE" }).then(mapFeedProject)
+}
+
+export type AiDescriptionContext = "VACANCY" | "PROFILE" | "PORTFOLIO"
+
+export interface AiDescriptionSession {
+  sessionId: number
+  contextType: AiDescriptionContext
+  status: "QUESTIONS" | "REVIEW" | "COMPLETED"
+  versionCount: number
+  maxVersions: number
+  text: string
+  questions: string[]
+  canContinue: boolean
+  availableAt: string
+}
+
+export function startAiDescription(contextType: AiDescriptionContext, text: string) {
+  return request<AiDescriptionSession>("/ai/descriptions/sessions", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ contextType, text }),
   })
 }
 
-export function addProfileSkill(profileId: string, skillId: string, level: SkillLevel) {
-  return request<RemoteProfile>(`/profiles/${profileId}/skills`, {
+export function generateAiDescription(sessionId: number, text: string, answers: string[]) {
+  return request<AiDescriptionSession>(`/ai/descriptions/sessions/${sessionId}/generate`, {
     method: "POST",
-    body: JSON.stringify({ skillId: Number(skillId), proficiencyLevel: levelToApi(level), yearsOfExperience: 0 }),
-  }).then(mapProfile)
+    body: JSON.stringify({ text, answers }),
+  })
+}
+
+export function continueAiDescription(sessionId: number, text: string) {
+  return request<AiDescriptionSession>(`/ai/descriptions/sessions/${sessionId}/continue`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  })
+}
+
+export function finishAiDescription(sessionId: number, action: "ACCEPT" | "EDIT", text: string) {
+  return request<AiDescriptionSession>(`/ai/descriptions/sessions/${sessionId}/finish`, {
+    method: "POST",
+    body: JSON.stringify({ action, text }),
+  })
+}
+
+export interface LlmUsageSummary {
+  requests: number
+  successfulRequests: number
+  failedRequests: number
+  successRate: number
+  inputTokens: number
+  outputTokens: number
+  cachedContextTokens: number
+  reasoningTokens: number
+  totalTokens: number
+  averageTokensPerRequest: number
+  averageLatencyMs: number
+  uniqueUsers: number
+  estimatedCostUsd: number
+}
+
+export interface AdminUsageMetrics {
+  generatedAt: string
+  timeZone: string
+  periodDays: number
+  periodStart: string
+  periodEnd: string
+  totals: LlmUsageSummary
+  currentMonth: {
+    actual: LlmUsageSummary
+    projectedRequests: number
+    projectedTotalTokens: number
+    projectedCostUsd: number
+    elapsedDays: number
+    daysInMonth: number
+    remainingDays: number
+  }
+  daily: { date: string; metrics: LlmUsageSummary }[]
+  byContext: { label: string; metrics: LlmUsageSummary }[]
+  byProvider: { label: string; metrics: LlmUsageSummary }[]
+  byRequestType: { label: string; metrics: LlmUsageSummary }[]
+  pricing: {
+    configured: boolean
+    currency: "USD"
+    inputPerMillion: number
+    outputPerMillion: number
+  }
+}
+
+export function getAdminUsageMetrics(days = 30) {
+  return request<AdminUsageMetrics>(`/admin/metrics?days=${Math.max(1, Math.min(365, days))}`)
 }
 
 export function addPortfolioProject(profileId: string, project: PortfolioProject) {
@@ -220,7 +290,6 @@ export function addPortfolioProject(profileId: string, project: PortfolioProject
       sourceProjectId: project.sourceProjectId ? Number(project.sourceProjectId) : null,
       title: project.title,
       description: project.description,
-      technologies: project.technologies,
     }),
   }).then(mapProfile)
 }
@@ -228,20 +297,12 @@ export function addPortfolioProject(profileId: string, project: PortfolioProject
 export function updatePortfolioProject(profileId: string, project: PortfolioProject) {
   return request<RemoteProfile>(`/profiles/${profileId}/portfolio/${project.id}`, {
     method: "PUT",
-    body: JSON.stringify({ title: project.title, description: project.description, technologies: project.technologies }),
+    body: JSON.stringify({ title: project.title, description: project.description }),
   }).then(mapProfile)
 }
 
 export function removePortfolioProject(profileId: string, portfolioId: string) {
   return request<void>(`/profiles/${profileId}/portfolio/${portfolioId}`, { method: "DELETE" })
-}
-
-export function removeProfileSkill(profileId: string, skillId: string) {
-  return request<void>(`/profiles/${profileId}/skills/${skillId}`, { method: "DELETE" })
-}
-
-export function skillLevelToApi(level: SkillLevel) {
-  return levelToApi(level)
 }
 
 export interface AuthUser {
@@ -253,6 +314,8 @@ export interface AuthUser {
   token: string
 }
 
+export type AuthRole = "RECRUITER" | "CANDIDATE"
+
 function saveAuth(response: AuthUser) {
   if (typeof window !== "undefined" && response.token) window.localStorage.setItem("talentmatch_token", response.token)
   return { ...response, id: String(response.id), profileId: response.profileId ? String(response.profileId) : undefined }
@@ -262,10 +325,10 @@ export function login(email: string, password: string) {
   return request<AuthUser>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }).then(saveAuth)
 }
 
-export function register(email: string, password: string, displayName: string) {
+export function register(email: string, password: string, displayName: string, role: AuthRole) {
   return request<AuthUser>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, displayName, role: "RECRUITER" }),
+    body: JSON.stringify({ email, password, displayName, role }),
   }).then(saveAuth)
 }
 
@@ -392,20 +455,12 @@ export function saveRecruiterNote(conversationId: string, content: string) {
 
 export type ApiMatch = Awaited<ReturnType<typeof listRecommendations>>["results"][number]
 
-export function toMatchResult(result: ApiMatch, profile: Profile, project: Project): MatchResult {
+export function toMatchResult(result: ApiMatch, profile: Profile): MatchResult {
   return {
     profile,
     score: Number(result.score ?? 0),
-    matchedSkills: (result.matched_skills ?? []).map((name) => {
-      const owned = profile.skills.find((skill) => skill.name.toLowerCase() === name.toLowerCase())
-      const required = project.requirements.find((requirement) => requirement.name.toLowerCase() === name.toLowerCase())
-      return {
-        name,
-        candidateLevel: owned?.level ?? "Básico",
-        requiredLevel: required?.minLevel ?? "Básico",
-        meetsLevel: true,
-      }
-    }),
-    missingSkills: result.skill_gaps ?? [],
+    textScore: Number(result.text_score ?? result.score ?? 0),
+    interestBoost: Number(result.interest_boost ?? 0),
+    interested: Boolean(result.interested),
   }
 }

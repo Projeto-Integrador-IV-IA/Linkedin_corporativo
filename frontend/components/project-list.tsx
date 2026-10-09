@@ -1,9 +1,8 @@
 "use client"
 
-import { FolderPlus, Pencil, Rocket } from "lucide-react"
+import { FolderPlus, Pencil, Rocket, Users } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
-import { SkillLevelBadge } from "@/components/skill-level-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { Project } from "@/lib/types"
@@ -22,7 +21,7 @@ export function ProjectList({ onCreate, onOpen }: ProjectListProps) {
         <div>
           <h2 className="text-lg font-semibold">Projetos publicados</h2>
           <p className="text-sm text-muted-foreground">
-            Consulte os detalhes, edite requisitos e veja os profissionais recomendados.
+            Consulte as descrições e veja os profissionais recomendados pela análise textual.
           </p>
         </div>
         <Button onClick={onCreate}>
@@ -66,14 +65,10 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: (id: strin
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
-        <div className="flex flex-wrap gap-1.5">
-          {project.requirements.length === 0 ? (
-            <span className="text-sm text-muted-foreground">Sem skills exigidas.</span>
-          ) : (
-            project.requirements.map((requirement) => (
-              <SkillLevelBadge key={requirement.id} level={requirement.minLevel} label={requirement.name} />
-            ))
-          )}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Users className="size-4" />
+          <strong className="text-foreground">{project.interestedCount ?? 0}</strong>
+          {(project.interestedCount ?? 0) === 1 ? "pessoa interessada" : "pessoas interessadas"}
         </div>
         <Button variant="outline" className="mt-auto w-full" onClick={() => onOpen(project.id)}>
           <Pencil data-icon="inline-start" />

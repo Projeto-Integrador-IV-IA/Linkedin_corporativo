@@ -2,7 +2,6 @@ package br.com.linkedincorporativo.project;
 
 import br.com.linkedincorporativo.project.domain.Application;
 import br.com.linkedincorporativo.project.domain.Project;
-import br.com.linkedincorporativo.project.domain.RequiredSkill;
 import br.com.linkedincorporativo.project.domain.UserAccount;
 import br.com.linkedincorporativo.project.repository.CandidateDecisionRepository;
 import br.com.linkedincorporativo.project.repository.ProjectRepository;
@@ -61,6 +60,7 @@ public class ProjectController {
         Project project = new Project();
         copy(request, project);
         if (currentUser == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Usuário não autenticado."));
+        if (!isRecruiter(currentUser)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Somente recrutadores podem publicar projetos."));
         project.setOwnerUserId(currentUser.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(view(projects.save(project)));
     }
@@ -94,29 +94,6 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{id}/required-skills")
-    @Transactional
-    public ResponseEntity<?> addRequiredSkill(@PathVariable Long id, @RequestBody RequiredSkillRequest request, @RequestAttribute(value = "currentUser", required = false) UserAccount currentUser) {
-        return projects.findById(id).map(project -> {
-            if (!canManage(project, currentUser)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Você só pode alterar seus próprios projetos."));
-            if (!blank(request.skillName()) && project.getRequiredSkills().stream().noneMatch(skill -> skill.getSkillName() != null && skill.getSkillName().trim().equalsIgnoreCase(request.skillName().trim()))) {
-                project.getRequiredSkills().add(new RequiredSkill(project, request.skillName().trim(), defaultValue(request.requiredLevel(), "BASICO")));
-            }
-            return ResponseEntity.ok(view(projects.save(project)));
-        }).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    @DeleteMapping("/{id}/required-skills/{skillId}")
-    @Transactional
-    public ResponseEntity<?> removeRequiredSkill(@PathVariable Long id, @PathVariable Long skillId, @RequestAttribute(value = "currentUser", required = false) UserAccount currentUser) {
-        return projects.findById(id).map(project -> {
-            if (!canManage(project, currentUser)) return ResponseEntity.<Void>status(HttpStatus.FORBIDDEN).build();
-            project.getRequiredSkills().removeIf(skill -> Objects.equals(skill.getId(), skillId));
-            projects.save(project);
-            return ResponseEntity.noContent().<Void>build();
-        }).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
     @PostMapping("/{id}/applications")
     @Transactional
     public ResponseEntity<?> apply(@PathVariable Long id, @RequestBody ApplicationRequest request, @RequestAttribute(value = "currentUser", required = false) UserAccount currentUser) {
@@ -148,19 +125,22 @@ public class ProjectController {
         return Map.of("id", project.getId(), "title", value(project.getTitle()), "description", value(project.getDescription()),
             "area", value(project.getArea()), "ownerName", value(project.getOwnerName()), "ownerEmail", value(project.getOwnerEmail()),
             "ownerUserId", project.getOwnerUserId() == null ? "" : project.getOwnerUserId(),
-            "status", value(project.getStatus()), "requiredSkills", project.getRequiredSkills().stream().map(skill -> Map.<String, Object>of(
-                "id", skill.getId(), "skillName", value(skill.getSkillName()), "requiredLevel", value(skill.getRequiredLevel()))).toList(),
+            "status", value(project.getStatus()),
+            "interestedCount", project.getApplications().stream().filter(app -> "INTERESSADO".equalsIgnoreCase(app.getStatus())).count(),
             "applications", project.getApplications().stream().map(app -> Map.<String, Object>of("id", app.getId(), "profileId", app.getProfileId(),
                 "profileName", value(app.getProfileName()), "profileEmail", value(app.getProfileEmail()), "status", value(app.getStatus()))).toList());
     }
 
     private static String value(String value) { return value == null ? "" : value; }
-    private static String defaultValue(String value, String fallback) { return blank(value) ? fallback : value; }
     private static boolean blank(String value) { return value == null || value.isBlank(); }
     private static boolean canManage(Project project, UserAccount currentUser) {
         if (currentUser == null) return true;
+        if (!isRecruiter(currentUser)) return false;
         if (project.getOwnerUserId() != null) return project.getOwnerUserId().equals(currentUser.getId());
         return project.getOwnerEmail() != null && project.getOwnerEmail().equalsIgnoreCase(currentUser.getEmail());
+    }
+    private static boolean isRecruiter(UserAccount user) {
+        return user != null && ("RECRUITER".equalsIgnoreCase(user.getRole()) || "MANAGER".equalsIgnoreCase(user.getRole()));
     }
 
     private void claimLegacyOwnership(Project project, UserAccount currentUser) {
@@ -171,7 +151,6 @@ public class ProjectController {
     }
 
     public record ProjectRequest(String title, String description, String area, String ownerName, String ownerEmail) {}
-    public record RequiredSkillRequest(String skillName, String requiredLevel) {}
     public record ApplicationRequest(Long profileId, String profileName, String profileEmail) {}
     public record StatusRequest(String status) {}
 }

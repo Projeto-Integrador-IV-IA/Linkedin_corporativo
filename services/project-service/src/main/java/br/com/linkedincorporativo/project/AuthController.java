@@ -41,8 +41,7 @@ public class AuthController {
         @RequestBody ProfileLink request
     ) {
         UserAccount user = auth.authenticate(authorization);
-        user.setProfileId(request.profileId());
-        return ResponseEntity.ok(view(user));
+        return ResponseEntity.ok(view(auth.linkProfile(user, request.profileId())));
     }
 
     private Map<String, Object> view(UserAccount user) {

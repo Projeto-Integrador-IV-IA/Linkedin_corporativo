@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ML Engine API
-  version: 1.0.0
+  version: 2.0.0
   description: Contrato entre o Match Orchestrator e o serviço Python de inferência.
 paths:
   /health:
@@ -45,36 +45,26 @@ components:
   schemas:
     Candidate:
       type: object
-      required: [candidate_id, skills]
+      required: [candidate_id, profile_description]
       properties:
         candidate_id:
           type: string
-        skills:
-          type: array
-          items:
-            type: string
-        profession:
+        profile_description:
           type: string
-        years_experience:
-          type: integer
-          minimum: 0
+          description: Concatenação da bio com as descrições dos projetos do portfólio.
     MatchRequest:
       type: object
-      required: [candidates, required_skills]
+      required: [candidates, project_description]
       properties:
         candidates:
           type: array
           items:
             $ref: '#/components/schemas/Candidate'
-        required_skills:
-          type: array
-          items:
-            type: string
-        required_title:
+        project_description:
           type: string
     MatchResult:
       type: object
-      required: [candidate_id, score, matched_skills, skill_gaps]
+      required: [candidate_id, score]
       properties:
         candidate_id:
           type: string
@@ -82,14 +72,6 @@ components:
           type: number
           minimum: 0
           maximum: 100
-        matched_skills:
-          type: array
-          items:
-            type: string
-        skill_gaps:
-          type: array
-          items:
-            type: string
     MatchResponse:
       type: object
       required: [results]

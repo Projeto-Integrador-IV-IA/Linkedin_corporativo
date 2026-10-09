@@ -2,10 +2,7 @@ package br.com.linkedincorporativo.profile;
 
 import br.com.linkedincorporativo.profile.domain.PortfolioProject;
 import br.com.linkedincorporativo.profile.domain.Profile;
-import br.com.linkedincorporativo.profile.domain.ProfileSkill;
-import br.com.linkedincorporativo.profile.domain.Skill;
 import br.com.linkedincorporativo.profile.repository.ProfileRepository;
-import br.com.linkedincorporativo.profile.repository.SkillRepository;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Map;
@@ -28,11 +25,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api")
 public class ProfileController {
     private final ProfileRepository profiles;
-    private final SkillRepository skills;
 
-    public ProfileController(ProfileRepository profiles, SkillRepository skills) {
+    public ProfileController(ProfileRepository profiles) {
         this.profiles = profiles;
-        this.skills = skills;
     }
 
     @GetMapping("/profiles")
@@ -88,70 +83,18 @@ public class ProfileController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/skills")
-    @Cacheable(cacheNames = "skills", key = "'all'")
-    public List<Map<String, Object>> listSkills() {
-        return skills.findAll().stream().map(skill -> Map.<String, Object>of("id", skill.getId(), "name", skill.getName())).toList();
-    }
-
-    @PostMapping("/skills")
-    @CacheEvict(cacheNames = {"skills", "profiles"}, allEntries = true)
-    public ResponseEntity<?> createSkill(@RequestBody SkillRequest request) {
-        if (blank(request.name())) return ResponseEntity.badRequest().body(Map.of("message", "Nome da skill é obrigatório."));
-        Skill skill = skills.findByNameIgnoreCase(request.name().trim()).orElseGet(() -> skills.save(new Skill(request.name().trim())));
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("id", skill.getId(), "name", skill.getName()));
-    }
-
-    @DeleteMapping("/skills/{id}")
-    @CacheEvict(cacheNames = {"skills", "profiles"}, allEntries = true)
-    public ResponseEntity<Void> deleteSkill(@PathVariable Long id) {
-        if (!skills.existsById(id)) return ResponseEntity.notFound().build();
-        skills.deleteById(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/profiles/{id}/skills")
-    @Transactional
-    @CacheEvict(cacheNames = "profiles", allEntries = true)
-    public ResponseEntity<?> addSkill(@PathVariable Long id, @RequestBody ProfileSkillRequest request) {
-        var profile = profiles.findById(id);
-        var skill = request.skillId() == null ? java.util.Optional.<Skill>empty() : skills.findById(request.skillId());
-        if (profile.isEmpty() || skill.isEmpty()) return ResponseEntity.notFound().build();
-        var existing = profile.get().getSkills().stream()
-            .filter(item -> Objects.equals(item.getSkill().getId(), skill.get().getId()))
-            .findFirst();
-        if (existing.isPresent()) {
-            existing.get().setProficiencyLevel(defaultValue(request.proficiencyLevel(), "BASICO"));
-            existing.get().setYearsOfExperience(request.yearsOfExperience() == null ? 0 : request.yearsOfExperience());
-        } else {
-            profile.get().getSkills().add(new ProfileSkill(profile.get(), skill.get(), defaultValue(request.proficiencyLevel(), "BASICO"), request.yearsOfExperience() == null ? 0 : request.yearsOfExperience()));
-        }
-        return ResponseEntity.ok(profileView(profiles.save(profile.get())));
-    }
-
-    @DeleteMapping("/profiles/{id}/skills/{skillId}")
-    @Transactional
-    @CacheEvict(cacheNames = "profiles", allEntries = true)
-    public ResponseEntity<Void> removeSkill(@PathVariable Long id, @PathVariable Long skillId) {
-        return profiles.findById(id).map(profile -> {
-            profile.getSkills().removeIf(item -> Objects.equals(item.getSkill().getId(), skillId));
-            profiles.save(profile);
-            return ResponseEntity.noContent().<Void>build();
-        }).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
     @PostMapping("/profiles/{id}/portfolio")
     @Transactional
     @CacheEvict(cacheNames = "profiles", allEntries = true)
     public ResponseEntity<?> addPortfolio(@PathVariable Long id, @RequestBody PortfolioRequest request) {
         return profiles.findById(id).map(profile -> {
             PortfolioProject item = request.sourceProjectId() == null
-                ? new PortfolioProject(profile, request.title(), request.description(), request.technologies())
+                ? new PortfolioProject(profile, request.title(), request.description(), "")
                 : profile.getPortfolioProjects().stream().filter(project -> Objects.equals(project.getSourceProjectId(), request.sourceProjectId())).findFirst()
-                    .orElseGet(() -> new PortfolioProject(profile, request.title(), request.description(), request.technologies()));
+                    .orElseGet(() -> new PortfolioProject(profile, request.title(), request.description(), ""));
             item.setTitle(request.title());
             item.setDescription(request.description());
-            item.setTechnologies(request.technologies());
+            item.setTechnologies("");
             item.setSourceProjectId(request.sourceProjectId());
             if (!profile.getPortfolioProjects().contains(item)) profile.getPortfolioProjects().add(item);
             return ResponseEntity.ok(profileView(profiles.save(profile)));
@@ -168,7 +111,7 @@ public class ProfileController {
             .map(item -> {
                 item.setTitle(request.title());
                 item.setDescription(request.description());
-                item.setTechnologies(request.technologies());
+                item.setTechnologies("");
                 return ResponseEntity.ok(profileView(profiles.save(profile)));
             })
             .orElseGet(() -> ResponseEntity.notFound().build())
@@ -220,18 +163,12 @@ public class ProfileController {
             "yearsOfExperience", profile.getYearsOfExperience() == null ? 0 : profile.getYearsOfExperience(),
             "bio", value(profile.getBio()),
             "avatarUrl", value(profile.getAvatarUrl()),
-            "skills", profile.getSkills().stream().map(this::skillView).toList(),
             "portfolioProjects", profile.getPortfolioProjects().stream().map(this::portfolioView).toList()
         );
     }
 
-    private Map<String, Object> skillView(ProfileSkill item) {
-        return Map.of("id", item.getId(), "skillId", item.getSkill().getId(), "skillName", item.getSkill().getName(),
-            "proficiencyLevel", value(item.getProficiencyLevel()), "yearsOfExperience", item.getYearsOfExperience() == null ? 0 : item.getYearsOfExperience());
-    }
-
     private Map<String, Object> portfolioView(PortfolioProject item) {
-        return Map.of("id", item.getId(), "title", value(item.getTitle()), "description", value(item.getDescription()), "technologies", value(item.getTechnologies()),
+        return Map.of("id", item.getId(), "title", value(item.getTitle()), "description", value(item.getDescription()),
             "sourceProjectId", item.getSourceProjectId() == null ? "" : item.getSourceProjectId());
     }
 
@@ -241,7 +178,5 @@ public class ProfileController {
     private static boolean blank(String value) { return value == null || value.isBlank(); }
 
     public record ProfileRequest(String fullName, String email, String profession, String educationLevel, Integer yearsOfExperience, String bio, String avatarUrl) {}
-    public record ProfileSkillRequest(Long skillId, String proficiencyLevel, Integer yearsOfExperience) {}
-    public record PortfolioRequest(Long sourceProjectId, String title, String description, String technologies) {}
-    public record SkillRequest(String name) {}
+    public record PortfolioRequest(Long sourceProjectId, String title, String description) {}
 }

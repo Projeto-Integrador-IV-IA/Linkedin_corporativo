@@ -20,13 +20,13 @@ O contrato da requisição e da resposta está em
 
 ## Comportamento do modelo
 
-Na inicialização, o serviço carrega o `XGBRanker`, o transformador TF-IDF, o
-calibrador e os metadados salvos no artefato. `/predict` recebe candidatos e a
-vaga, calcula as features e devolve scores ordenáveis.
+Na inicialização, o serviço carrega somente artefatos marcados como
+`description-ranker-v2`. `/predict` recebe `project_description` e uma lista de
+`profile_description`, calcula as features textuais e devolve todos os
+candidatos ordenados.
 
-O score exibido pelo produto é uma porcentagem calibrada relacionada à
-probabilidade histórica de candidatura. Não representa probabilidade de
-contratação ou decisão automática de RH.
+O score exibido pelo produto é uma compatibilidade textual de 0 a 100. Não
+representa probabilidade de contratação ou decisão automática de RH.
 
 Se o artefato estiver ausente ou não puder ser lido, o serviço usa o fallback
 determinístico implementado para o desenvolvimento e informa o estado no

@@ -1,19 +1,7 @@
-export type SkillLevel = "Básico" | "Intermediário" | "Avançado"
-
-export const SKILL_LEVELS: SkillLevel[] = ["Básico", "Intermediário", "Avançado"]
-
-export interface Skill {
-  id: string
-  skillId?: string
-  name: string
-  level: SkillLevel
-}
-
 export interface PortfolioProject {
   id: string
   title: string
   description: string
-  technologies: string
   sourceProjectId?: string
 }
 
@@ -26,36 +14,24 @@ export interface Profile {
   education: string
   projects: string
   portfolioProjects?: PortfolioProject[]
-  skills: Skill[]
-}
-
-export interface Requirement {
-  id: string
-  name: string
-  minLevel: SkillLevel
 }
 
 export interface Project {
   id: string
   title: string
   description: string
-  requirements: Requirement[]
   area?: string
   ownerName?: string
+  ownerAvatarUrl?: string
   ownerEmail?: string
   status?: string
-}
-
-export interface SkillMatch {
-  name: string
-  candidateLevel: SkillLevel
-  requiredLevel: SkillLevel
-  meetsLevel: boolean
+  interestedCount?: number
 }
 
 export interface MatchResult {
   profile: Profile
   score: number
-  matchedSkills: SkillMatch[]
-  missingSkills: string[]
+  textScore: number
+  interestBoost: number
+  interested: boolean
 }

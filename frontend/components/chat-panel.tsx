@@ -5,7 +5,6 @@ import { Download, FileText, MessageCircle, Mic, Paperclip, Send, Square, X } fr
 
 import { useApp } from "@/components/app-provider"
 import { ProfileAvatar } from "@/components/profile-avatar"
-import { SkillLevelBadge } from "@/components/skill-level-badge"
 import { downloadChatAttachment, getRecruiterNote, listMessages, loadChatAttachment, saveRecruiterNote, sendMessage, type ChatConversation, type ChatMessage } from "@/lib/api"
 import type { Profile } from "@/lib/types"
 import { playNotificationSound } from "@/lib/notification-sound"
@@ -18,10 +17,11 @@ interface ChatPanelProps {
   conversation: ChatConversation
   profile?: Profile
   compact?: boolean
+  embedded?: boolean
   onClose?: () => void
 }
 
-export function ChatPanel({ conversation, profile, compact = false, onClose }: ChatPanelProps) {
+export function ChatPanel({ conversation, profile, compact = false, embedded = false, onClose }: ChatPanelProps) {
   const { authUser } = useApp()
   const isRecruiter = conversation.recruiterUserId === authUser?.id
   const otherParticipantName = isRecruiter ? conversation.professionalName : conversation.recruiterName
@@ -198,7 +198,7 @@ export function ChatPanel({ conversation, profile, compact = false, onClose }: C
   }
 
   return (
-    <Card className={compact ? "fixed bottom-2 right-2 z-50 flex h-[min(520px,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-[380px] flex-col shadow-2xl sm:bottom-4 sm:right-4" : "flex h-[min(650px,calc(100dvh-220px))] min-h-[520px] flex-col"}>
+    <Card className={compact ? embedded ? "flex h-[min(520px,calc(100dvh-1rem))] w-[min(380px,calc(100vw-1.5rem))] flex-col shadow-2xl" : "fixed bottom-2 right-2 z-50 flex h-[min(520px,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-[380px] flex-col shadow-2xl sm:bottom-4 sm:right-4" : "flex h-[min(650px,calc(100dvh-220px))] min-h-[520px] flex-col"}>
       <CardHeader className="flex flex-row items-center justify-between border-b py-3">
         <div className="flex min-w-0 items-center gap-2">
           {profile ? <ProfileAvatar profile={profile} className="size-9" /> : <MessageCircle className="size-5 text-primary" />}
@@ -207,17 +207,17 @@ export function ChatPanel({ conversation, profile, compact = false, onClose }: C
             <p className="truncate text-xs text-muted-foreground">{conversation.projectTitle}</p>
           </div>
         </div>
-        {onClose && <Button variant="ghost" size="icon" onClick={onClose}><X /></Button>}
+        {onClose && <Button variant="ghost" size="icon" aria-label="Fechar conversa" onClick={onClose}><X /></Button>}
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-3">
-        {profile && <details className="rounded-lg border border-border p-2">
+        {profile && !compact && <details className="rounded-lg border border-border p-2">
           <summary className="cursor-pointer text-sm font-medium">Ver perfil do profissional</summary>
           <div className="mt-2 flex flex-col gap-2 text-sm">
             <p className="font-medium">{profile.name}</p>
             <p className="text-muted-foreground">{profile.profession}</p>
             {profile.education && <p className="text-xs text-muted-foreground">Formação: {profile.education}</p>}
             {profile.portfolioProjects && profile.portfolioProjects.length > 0 ? <div className="flex flex-col gap-1.5"><p className="text-xs font-medium">Projetos realizados</p>{profile.portfolioProjects.map((project) => <div key={project.id} className="rounded border border-border p-2 text-xs"><p className="font-medium">{project.title}</p>{project.description && <p className="text-muted-foreground">{project.description}</p>}</div>)}</div> : profile.projects && <p className="text-xs text-muted-foreground">Projetos: {profile.projects}</p>}
-            {profile.skills.length > 0 && <div className="flex flex-wrap gap-1.5">{profile.skills.map((skill) => <SkillLevelBadge key={skill.id} level={skill.level} label={skill.name} />)}</div>}
+            {profile.projects && <p className="whitespace-pre-wrap text-xs text-muted-foreground">{profile.projects}</p>}
           </div>
         </details>}
         <div
@@ -268,7 +268,7 @@ export function ChatPanel({ conversation, profile, compact = false, onClose }: C
           <Input value={content} onChange={(event) => setContent(event.target.value)} placeholder="Digite uma mensagem..." />
           <Button type="submit" size="icon" aria-label="Enviar mensagem" disabled={recording}><Send /></Button>
         </form>
-        {isRecruiter && <details className="rounded-lg border border-border p-2">
+        {isRecruiter && !compact && <details className="rounded-lg border border-border p-2">
           <summary className="cursor-pointer text-sm font-medium">Nota particular do recrutador</summary>
           <div className="mt-2 flex flex-col gap-2">
             {profile && <p className="text-xs text-muted-foreground">Apenas você verá esta nota sobre {profile.name}.</p>}

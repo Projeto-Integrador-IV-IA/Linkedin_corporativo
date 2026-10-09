@@ -1,5 +1,6 @@
 package br.com.linkedincorporativo.profile.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -19,6 +20,7 @@ public class PortfolioProject {
     @JoinColumn(name = "profile_id", nullable = false)
     private Profile profile;
     private String title;
+    @Column(columnDefinition = "TEXT")
     private String description;
     private String technologies;
     private Long sourceProjectId;

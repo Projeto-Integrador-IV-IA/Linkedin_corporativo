@@ -1,12 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BadgeCheck, Check, GraduationCap, MessageCircle, RefreshCw, Sparkles, Target, Users, X } from "lucide-react"
+import { BadgeCheck, Check, GraduationCap, Heart, MessageCircle, RefreshCw, Sparkles, Target, Users, X } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
 import { ChatPanel } from "@/components/chat-panel"
 import { ProfileAvatar } from "@/components/profile-avatar"
-import { SkillLevelBadge } from "@/components/skill-level-badge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -89,18 +88,8 @@ function ProfileDetailDialog({ profile }: { profile: Profile }) {
               {profile.portfolioProjects.map((project) => <div key={project.id} className="rounded-md border border-border p-2 text-sm">
                 <p className="font-medium">{project.title}</p>
                 {project.description && <p className="text-muted-foreground">{project.description}</p>}
-                {project.technologies && <p className="text-xs text-muted-foreground">{project.technologies}</p>}
               </div>)}
             </div> : <p className="text-sm text-muted-foreground">{profile.projects || "Nenhum projeto informado."}</p>}
-          </div>
-          <Separator />
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium">Skills</p>
-            <div className="flex flex-wrap gap-1.5">
-              {profile.skills.map((s) => (
-                <SkillLevelBadge key={s.id} level={s.level} label={s.name} />
-              ))}
-            </div>
           </div>
         </div>
       </DialogContent>
@@ -109,7 +98,7 @@ function ProfileDetailDialog({ profile }: { profile: Profile }) {
 }
 
 function CandidateCard({ result, decision, onChat, onDecision }: { result: MatchResult; decision?: CandidateDecision; onChat: () => void; onDecision: (status: CandidateDecision["status"]) => void }) {
-  const { profile, score, matchedSkills, missingSkills } = result
+  const { profile, score } = result
   const tone = scoreTone(score)
 
   return (
@@ -126,6 +115,11 @@ function CandidateCard({ result, decision, onChat, onDecision }: { result: Match
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
+        {result.interested ? (
+          <Badge variant="secondary" className="w-fit gap-1.5 text-primary">
+            <Heart className="size-3 fill-current" /> Demonstrou interesse · +{result.interestBoost} pontos
+          </Badge>
+        ) : null}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-muted-foreground">
@@ -140,38 +134,12 @@ function CandidateCard({ result, decision, onChat, onDecision }: { result: Match
             className={`[&_[data-slot=progress-track]]:h-2 ${tone.bar}`}
           />
           <span className={`text-xs font-medium ${tone.text}`}>{tone.label}</span>
+          {result.interested ? <span className="text-xs text-muted-foreground">Compatibilidade textual: {result.textScore}%</span> : null}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Skills em match
-          </p>
-          {matchedSkills.length === 0 ? (
-            <span className="text-sm text-muted-foreground">
-              Nenhuma skill correspondente.
-            </span>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {matchedSkills.map((s) => (
-                <Badge
-                  key={s.name}
-                  className="gap-1 border-transparent bg-chart-3/15 text-chart-3"
-                >
-                  <BadgeCheck className="size-3" />
-                  {s.name}
-                  {!s.meetsLevel && (
-                    <span className="text-chart-4">({s.candidateLevel})</span>
-                  )}
-                </Badge>
-              ))}
-            </div>
-          )}
-          {missingSkills.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Faltam: {missingSkills.join(", ")}
-            </p>
-          )}
-        </div>
+        <p className="line-clamp-4 text-sm text-muted-foreground">
+          {profile.projects || "Este profissional ainda não adicionou uma descrição profissional."}
+        </p>
 
         <div className="mt-auto pt-1">
           <ProfileDetailDialog profile={profile} />
@@ -223,7 +191,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
         const mappedCandidates = response.results
             .map((result) => {
               const profile = profiles.find((item) => item.id === String(result.candidate_id))
-              return profile ? toMatchResult(result, profile, project) : null
+              return profile ? toMatchResult(result, profile) : null
             })
             .filter((result): result is MatchResult => result !== null)
         setAllCandidates(mappedCandidates)
@@ -334,14 +302,9 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {!projectId && <div className="flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1.5 text-sm font-medium">
-              <Target className="size-4 text-primary" />
-              Skills exigidas:
-            </span>
-            {project.requirements.map((r) => (
-              <SkillLevelBadge key={r.id} level={r.minLevel} label={r.name} />
-            ))}
+          {!projectId && <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Target className="size-4 text-primary" />
+            Ranking calculado pelas descrições, com interesse declarado como sinal adicional configurável.
           </div>}
           <Separator />
           <div className="flex flex-wrap gap-6">

@@ -32,7 +32,31 @@ Os requisitos das issues 14, 15 e 16 devem ser entregues nesta separação: data
 
 ## Anotações
 
-## Treinamento do ranking
+## Ranker textual v2
+
+O contrato atual usa exclusivamente `project_description` e
+`profile_description`. O segundo campo concatena a bio e as descrições dos
+projetos do portfólio; skills, profissão, escolaridade e experiência não entram
+como features separadas.
+
+O script [`training/train_description_ranker.py`](training/train_description_ranker.py)
+recebe um CSV de pares textuais com `label` 0/1 e, preferencialmente,
+`project_id`. Quando o identificador existe, projetos inteiros são separados
+entre treino e validação para evitar vazamento.
+
+```bash
+cd ml
+python training/train_description_ranker.py \
+  --input data/processed/description_pairs.csv \
+  --output models/job_ranker.joblib
+```
+
+O artefato recebe a versão `description-ranker-v2`. O ML Engine ignora
+artefatos do contrato anterior e usa similaridade TF-IDF como fallback até que
+um modelo v2 seja publicado. A seleção final do dataset, licença, idioma,
+avaliação de vieses e métricas NDCG@10 estão acompanhadas na Task 27.
+
+## Ranker legado v1
 
 O script [`training/train_ranker.py`](training/train_ranker.py) treina um
 `XGBRanker` usando o dataset `data/job-recommendation`.
@@ -46,7 +70,7 @@ mas não informa contratação ou aprovação. Portanto, o treinamento usa:
 - consulta de ranking: `(UserID, WindowID)`;
 - divisão temporal: janelas 1–5 para treino, 6 para validação e 7 para teste.
 
-As features combinam similaridade TF-IDF entre o histórico profissional e os
+As features do modelo legado combinavam similaridade TF-IDF entre o histórico profissional e os
 requisitos da vaga, sobreposição de palavras, localização, experiência e
 informações de formação. Como os negativos são amostrados, a porcentagem
 retornada é um índice calibrado de probabilidade de candidatura histórica,
@@ -66,7 +90,7 @@ Para o treinamento completo, remova `--max-queries` ou use `--max-queries 0`.
 O script lê `jobs.tsv` diretamente; quando ele não estiver extraído, lê os
 registros necessários de `jobs.zip` sem descompactar o arquivo inteiro.
 
-O artefato salvo contém o ranker, o TF-IDF, o calibrador, a lista de features,
+O artefato legado contém o ranker, o TF-IDF, o calibrador, a lista de features,
 a definição da pontuação e as métricas `NDCG@10` e `MRR`. O serviço online deve
 carregar esse artefato na inicialização; treinamento não deve ocorrer dentro
 do endpoint `/predict`.

@@ -1,5 +1,7 @@
 package br.com.linkedincorporativo.apigateway;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -27,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 @CrossOrigin(origins = "*")
 public class ApiProxyController {
     private final RestClient client = RestClient.create();
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final String profileUrl;
     private final String projectUrl;
     private final String matchUrl;
@@ -40,16 +44,22 @@ public class ApiProxyController {
     @GetMapping("/auth/me") public ResponseEntity<Object> me(@RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/auth/me", auth); }
     @PatchMapping("/auth/profile") public ResponseEntity<Object> linkProfile(@RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return patch(projectUrl + "/api/auth/profile", body, auth); }
 
+    @PostMapping("/ai/descriptions/sessions") public ResponseEntity<Object> startAiDescription(@RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/ai/descriptions/sessions", body, auth); }
+    @PostMapping("/ai/descriptions/sessions/{id}/generate") public ResponseEntity<Object> generateAiDescription(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/ai/descriptions/sessions/" + id + "/generate", body, auth); }
+    @PostMapping("/ai/descriptions/sessions/{id}/continue") public ResponseEntity<Object> continueAiDescription(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/ai/descriptions/sessions/" + id + "/continue", body, auth); }
+    @PostMapping("/ai/descriptions/sessions/{id}/finish") public ResponseEntity<Object> finishAiDescription(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/ai/descriptions/sessions/" + id + "/finish", body, auth); }
+
+    @GetMapping("/admin/metrics") public ResponseEntity<Object> adminMetrics(@RequestParam(defaultValue = "30") int days, @RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/admin/metrics?days=" + days, auth); }
+
+    @GetMapping("/feed/projects") public ResponseEntity<Object> projectFeed(@RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/feed/projects", auth); }
+    @PostMapping("/feed/projects/{id}/interest") public ResponseEntity<Object> expressInterest(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return post(projectUrl + "/api/feed/projects/" + id + "/interest", Map.of(), auth); }
+    @DeleteMapping("/feed/projects/{id}/interest") public ResponseEntity<Object> withdrawInterest(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(projectUrl + "/api/feed/projects/" + id + "/interest", auth); }
+
     @GetMapping("/profiles") public ResponseEntity<Object> profiles(@RequestHeader(value = "Authorization", required = false) String auth) { return get(profileUrl + "/api/profiles", auth); }
     @GetMapping("/profiles/{id}") public ResponseEntity<Object> profile(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return get(profileUrl + "/api/profiles/" + id, auth); }
     @PostMapping("/profiles") public ResponseEntity<Object> createProfile(@RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(profileUrl + "/api/profiles", body, auth); }
     @PutMapping("/profiles/{id}") public ResponseEntity<Object> updateProfile(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return put(profileUrl + "/api/profiles/" + id, body, auth); }
     @DeleteMapping("/profiles/{id}") public ResponseEntity<Object> deleteProfile(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(profileUrl + "/api/profiles/" + id, auth); }
-    @GetMapping("/skills") public ResponseEntity<Object> skills(@RequestHeader(value = "Authorization", required = false) String auth) { return get(profileUrl + "/api/skills", auth); }
-    @PostMapping("/skills") public ResponseEntity<Object> createSkill(@RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(profileUrl + "/api/skills", body, auth); }
-    @DeleteMapping("/skills/{id}") public ResponseEntity<Object> deleteSkill(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(profileUrl + "/api/skills/" + id, auth); }
-    @PostMapping("/profiles/{id}/skills") public ResponseEntity<Object> addSkill(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(profileUrl + "/api/profiles/" + id + "/skills", body, auth); }
-    @DeleteMapping("/profiles/{id}/skills/{skillId}") public ResponseEntity<Object> removeSkill(@PathVariable Long id, @PathVariable Long skillId, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(profileUrl + "/api/profiles/" + id + "/skills/" + skillId, auth); }
     @PostMapping("/profiles/{id}/portfolio") public ResponseEntity<Object> addPortfolio(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(profileUrl + "/api/profiles/" + id + "/portfolio", body, auth); }
     @PutMapping("/profiles/{id}/portfolio/{portfolioId}") public ResponseEntity<Object> updatePortfolio(@PathVariable Long id, @PathVariable Long portfolioId, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return put(profileUrl + "/api/profiles/" + id + "/portfolio/" + portfolioId, body, auth); }
     @DeleteMapping("/profiles/{id}/portfolio/{portfolioId}") public ResponseEntity<Object> removePortfolio(@PathVariable Long id, @PathVariable Long portfolioId, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(profileUrl + "/api/profiles/" + id + "/portfolio/" + portfolioId, auth); }
@@ -60,8 +70,6 @@ public class ApiProxyController {
     @PutMapping("/projects/{id}") public ResponseEntity<Object> updateProject(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return put(projectUrl + "/api/projects/" + id, body, auth); }
     @PatchMapping("/projects/{id}/status") public ResponseEntity<Object> projectStatus(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return patch(projectUrl + "/api/projects/" + id + "/status", body, auth); }
     @DeleteMapping("/projects/{id}") public ResponseEntity<Object> deleteProject(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(projectUrl + "/api/projects/" + id, auth); }
-    @PostMapping("/projects/{id}/required-skills") public ResponseEntity<Object> addRequiredSkill(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/projects/" + id + "/required-skills", body, auth); }
-    @DeleteMapping("/projects/{id}/required-skills/{skillId}") public ResponseEntity<Object> removeRequiredSkill(@PathVariable Long id, @PathVariable Long skillId, @RequestHeader(value = "Authorization", required = false) String auth) { return delete(projectUrl + "/api/projects/" + id + "/required-skills/" + skillId, auth); }
     @PostMapping("/projects/{id}/applications") public ResponseEntity<Object> apply(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/projects/" + id + "/applications", body, auth); }
     @PatchMapping("/projects/{id}/applications/{applicationId}/status") public ResponseEntity<Object> applicationStatus(@PathVariable Long id, @PathVariable Long applicationId, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return patch(projectUrl + "/api/projects/" + id + "/applications/" + applicationId + "/status", body, auth); }
     @GetMapping("/projects/{id}/candidate-decisions") public ResponseEntity<Object> decisions(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/projects/" + id + "/candidate-decisions", auth); }
@@ -130,5 +138,15 @@ public class ApiProxyController {
         catch (RestClientResponseException exception) { return error(exception); }
     }
     private static void addAuth(HttpHeaders headers, String auth) { if (auth != null && !auth.isBlank()) headers.set("Authorization", auth); }
-    private ResponseEntity<Object> error(RestClientResponseException exception) { return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", exception.getResponseBodyAsString())); }
+    private ResponseEntity<Object> error(RestClientResponseException exception) {
+        String body = exception.getResponseBodyAsString();
+        if (body != null && !body.isBlank()) {
+            try {
+                return ResponseEntity.status(exception.getStatusCode()).body(objectMapper.readValue(body, Object.class));
+            } catch (JsonProcessingException ignored) {
+                return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", body));
+            }
+        }
+        return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", "Não foi possível concluir a solicitação."));
+    }
 }

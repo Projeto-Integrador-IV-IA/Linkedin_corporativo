@@ -1,18 +1,23 @@
 # Frontend do LinkedIn Corporativo
 
 Frontend do MVP criado em Next.js. A aplicação usa o Gateway como única
-entrada do backend e oferece login, perfil, projetos, recomendações e chat.
+entrada do backend e oferece login, perfil, projetos, recomendações, chat e
+dashboard administrativo de uso das LLMs.
 
 ## Telas e fluxos
 
 - **Login e cadastro**: autenticação e criação de usuário.
-- **Meu Perfil**: dados pessoais, skills, portfólio e foto.
+- **Meu Perfil**: dados pessoais, descrição profissional, portfólio e foto.
 - **Projetos**: lista dos projetos do recrutador, criação, edição e acesso aos
   detalhes.
 - **Detalhes do projeto**: recomendações ordenadas pelo score, porcentagem de
   correspondência, foto do profissional e ações de aceitar, rejeitar e chat.
 - **Chats**: conversas em layout responsivo, lista lateral, mensagens,
   perfil do profissional e notas particulares do recrutador.
+- **Dashboard administrativo**: tokens de entrada/saída/cache/raciocínio,
+  latência, falhas, custos configuráveis e projeção mensal.
+- **Oportunidades**: feed de projetos abertos para profissionais, contagem
+  agregada e botão para demonstrar ou retirar interesse.
 - **Tema visual**: alternância entre modo claro e escuro, com paleta baseada
   no azul-marinho e ciano da identidade Synapse.
 

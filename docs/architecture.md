@@ -25,25 +25,28 @@ consultas do Profile Service, mas não é fonte de verdade.
 
 ## Componentes
 
-- **Frontend**: autenticação, perfil, projetos, recomendações e chats. Usa
+- **Frontend**: autenticação, perfil, projetos, recomendações, chats, feed de
+  oportunidades e dashboard administrativo de LLM. Usa
   polling de dois segundos para atualizar mensagens e contadores.
 - **API Gateway**: ponto de entrada público, proxy para os serviços, CORS e
   healthcheck de dependências.
-- **Profile Service**: perfis, foto/avatar, skills e portfólio.
+- **Profile Service**: perfis, foto/avatar, descrições profissionais e portfólio.
 - **Project Service**: usuários, sessões, projetos, decisões, chats, mensagens
-  e notas particulares.
+  e notas particulares. Também mantém as sessões do assistente LLM, chama o
+  provedor configurado (Gemini ou NVIDIA) sem expor a credencial e agrega a
+  telemetria de tokens para administradores.
 - **Match Orchestrator**: integra dados de perfil e projeto e solicita scores
   ao ML Engine.
-- **ML Engine**: carrega o `XGBRanker` treinado e responde à inferência.
-- **Redis**: cache de perfis e skills com TTL de 60 segundos e fallback para
+- **ML Engine**: carrega o ranker textual v2 e responde à inferência.
+- **Redis**: cache de perfis com TTL de 60 segundos e fallback para
   PostgreSQL.
 
 ## Donos dos dados
 
 | Banco | Dono | Dados |
 |---|---|---|
-| `profile-db` | Profile Service | perfis, avatar, skills e portfólio |
-| `project-db` | Project Service | usuários, tokens, projetos, decisões, chats, mensagens e notas |
+| `profile-db` | Profile Service | perfis, avatar, descrições e portfólio |
+| `project-db` | Project Service | usuários, sessões, projetos, telemetria LLM, decisões, chats, mensagens e notas |
 | `match-db` | Match Orchestrator | dados auxiliares/resultados de matching |
 
 Cada serviço é dono das próprias tabelas. O Match Orchestrator usa HTTP para
@@ -56,21 +59,44 @@ o token Bearer na sessão local e o envia nas chamadas seguintes. O interceptor
 do Project Service identifica o usuário e as operações de projeto verificam o
 `ownerId`. Assim, um recrutador só gerencia projetos próprios.
 
+O papel `ADMIN` é provisionado por segredo de ambiente, não pelo cadastro
+público. O endpoint agregado de métricas valida esse papel no Project Service,
+mesmo que alguém tente acessá-lo diretamente pelo Gateway.
+
 As mensagens pertencem a uma conversa com dois participantes. A nota é
 associada ao recrutador que a criou e nunca é retornada ao outro participante.
 
 ## Fluxo de recomendação
 
 1. O usuário abre um projeto próprio.
-2. O Match Orchestrator consulta perfil, projeto e requisitos.
-3. O payload é enviado ao ML Engine conforme o contrato OpenAPI.
+2. O Match Orchestrator consulta a descrição do projeto, a bio e as descrições
+   do portfólio de todos os profissionais.
+3. O payload exclusivamente textual é enviado ao ML Engine conforme o contrato OpenAPI.
 4. O ranker retorna scores ordenáveis.
-5. A interface exibe os candidatos com porcentagem de correspondência.
-6. Aceitar/rejeitar grava uma decisão no Project Service; rejeitados são
+5. O orquestrador aplica o bônus configurável aos perfis que demonstraram
+   interesse e reordena o resultado, sem alterar o modelo textual.
+6. A interface exibe o score final, o score textual e o bônus de interesse.
+7. Aceitar/rejeitar grava uma decisão no Project Service; rejeitados são
    ocultados da lista ativa, mas permanecem no histórico.
 
-O score é calibrado a partir de candidatura histórica. Não é decisão de
-contratação nem previsão garantida de desempenho.
+O score representa compatibilidade textual entre as descrições. Não é decisão
+de contratação nem previsão garantida de desempenho. O score final pode incluir
+o bônus explícito de interesse, limitado a 100 pontos.
+
+## Fluxo de interesse
+
+O Project Service mantém uma relação única entre conta profissional e projeto.
+O endpoint do feed monta um DTO sanitizado com apenas a contagem agregada e o
+estado da própria sessão. A visão interna do projeto continua disponível ao
+Match Orchestrator para identificar os IDs de perfil que receberão o bônus.
+
+## Assistentes de escrita
+
+Os contextos de vaga, perfil geral e portfólio usam o mesmo fluxo seguro no
+Project Service. O serviço persiste o proprietário, o contador de versões e o
+fim da janela de uso. A primeira rodada pode fazer até cinco perguntas; as
+seguintes fazem até três e duas. Após três reformulações, continuar com a IA é
+bloqueado. Uma nova sessão só pode começar depois de 24 horas.
 
 ## Cache e disponibilidade
 

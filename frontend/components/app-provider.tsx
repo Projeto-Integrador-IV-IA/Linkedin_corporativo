@@ -3,29 +3,23 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
 
 import {
-  addProfileSkill,
   addPortfolioProject,
-  addRequiredSkill,
   createProfile,
   createProject,
-  createSkill,
   linkProfile,
   login as loginRequest,
   listProfiles,
   listProjects,
   listChats,
-  listSkills,
   logout as logoutRequest,
   me,
   register as registerRequest,
-  removeProfileSkill,
   removePortfolioProject,
-  removeRequiredSkill,
   updateProject as updateProjectRequest,
   updateProfile,
   updatePortfolioProject,
 } from "@/lib/api"
-import type { AuthUser } from "@/lib/api"
+import type { AuthRole, AuthUser } from "@/lib/api"
 import type { Profile, Project } from "@/lib/types"
 import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound"
 
@@ -38,7 +32,6 @@ const EMPTY_PROFILE: Profile = {
   profession: "",
   education: "",
   projects: "",
-  skills: [],
 }
 
 interface AppContextValue {
@@ -54,7 +47,7 @@ interface AppContextValue {
   authLoading: boolean
   unreadChats: number
   login: (email: string, password: string) => Promise<AuthUser>
-  register: (email: string, password: string, displayName: string) => Promise<AuthUser>
+  register: (email: string, password: string, displayName: string, role: AuthRole) => Promise<AuthUser>
   logout: () => void
 }
 
@@ -85,6 +78,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!authUser) {
+      setLoading(false)
+      return
+    }
+    if (authUser.role === "ADMIN") {
+      setProfiles([])
+      setProjects([])
       setLoading(false)
       return
     }
@@ -119,7 +118,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!authUser) {
+    if (!authUser || authUser.role === "ADMIN") {
       setUnreadChats(0)
       return
     }
@@ -148,7 +147,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   )
 
   useEffect(() => {
-    if (!authUser || authUser.profileId || profiles.length === 0) return
+    if (!authUser || authUser.role === "ADMIN" || authUser.profileId || profiles.length === 0) return
     const matchingProfile = profiles.find((profile) => profile.email?.trim().toLowerCase() === authUser.email?.trim().toLowerCase())
     if (!matchingProfile) return
     let active = true
@@ -164,8 +163,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return user
   }
 
-  async function register(email: string, password: string, displayName: string) {
-    const user = await registerRequest(email, password, displayName)
+  async function register(email: string, password: string, displayName: string, role: AuthRole) {
+    const user = await registerRequest(email, password, displayName, role)
     setAuthUser(user)
     return user
   }
@@ -183,22 +182,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const original = profiles.find((item) => item.id === profile.id)
     const profileWithLoginEmail = { ...profile, email: authUser?.email ?? profile.email }
     let persisted = profile.id === "new" ? await createProfile(profileWithLoginEmail) : await updateProfile(profileWithLoginEmail)
-
-    const catalog = await listSkills()
-    for (const skill of profile.skills.filter((item) => item.name.trim())) {
-      const known = catalog.find((item) => item.name.toLowerCase() === skill.name.trim().toLowerCase())
-      const catalogSkill = known ?? await createSkill(skill.name.trim())
-      persisted = await addProfileSkill(persisted.id, String(catalogSkill.id), skill.level)
-    }
-
-    const desiredSkillIds = new Set(
-      profile.skills.map((skill) => skill.skillId).filter((id): id is string => Boolean(id))
-    )
-    for (const skill of original?.skills ?? []) {
-      if (skill.skillId && !desiredSkillIds.has(skill.skillId)) {
-        await removeProfileSkill(persisted.id, skill.skillId)
-      }
-    }
 
     const desiredPortfolio = profile.portfolioProjects ?? []
     const desiredPortfolioIds = new Set(desiredPortfolio.map((item) => item.id))
@@ -233,33 +216,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   async function addProject(project: Project) {
     setError("")
-    let persisted = await createProject(project, currentProfile)
-    const uniqueRequirements = Array.from(new Map(project.requirements.filter((item) => item.name.trim()).map((item) => [item.name.trim().toLowerCase(), item])).values())
-    for (const requirement of uniqueRequirements) {
-      persisted = await addRequiredSkill(persisted.id, requirement.name.trim(), requirement.minLevel)
-    }
+    const persisted = await createProject(project, currentProfile)
     setProjects((previous) => [persisted, ...previous.filter((item) => item.id !== persisted.id)])
     return persisted
   }
 
-  async function updateProject(project: Project, original: Project) {
+  async function updateProject(project: Project, _original: Project) {
     setError("")
-    let persisted = await updateProjectRequest(project, currentProfile)
-
-    for (const requirement of original.requirements) {
-      if (/^\d+$/.test(requirement.id)) {
-        await removeRequiredSkill(project.id, requirement.id)
-      }
-    }
-
-    const uniqueRequirements = Array.from(new Map(project.requirements.filter((item) => item.name.trim()).map((item) => [item.name.trim().toLowerCase(), item])).values())
-    for (const requirement of uniqueRequirements) {
-      persisted = await addRequiredSkill(project.id, requirement.name.trim(), requirement.minLevel)
-    }
-
-    if (project.requirements.length === 0) {
-      persisted = { ...persisted, requirements: [] }
-    }
+    const persisted = await updateProjectRequest(project, currentProfile)
 
     setProjects((previous) => previous.map((item) => (item.id === persisted.id ? persisted : item)))
     return persisted

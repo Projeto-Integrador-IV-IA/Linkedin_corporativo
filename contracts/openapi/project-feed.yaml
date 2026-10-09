@@ -1,0 +1,64 @@
+openapi: 3.0.3
+info:
+  title: Project Feed API
+  version: 1.0.0
+  description: Feed de projetos abertos e manifestação de interesse dos profissionais.
+paths:
+  /api/feed/projects:
+    get:
+      summary: Lista projetos abertos sem revelar os profissionais interessados
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Feed da conta autenticada
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/FeedProject' }
+        '403': { description: A conta não possui um papel autorizado a consultar o feed }
+  /api/feed/projects/{projectId}/interest:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      summary: Demonstra interesse no projeto
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Estado atualizado do projeto no feed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedProject' }
+        '409': { description: Perfil não salvo, projeto fechado ou projeto pertencente à própria conta }
+    delete:
+      summary: Retira o interesse do projeto
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Estado atualizado do projeto no feed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedProject' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    FeedProject:
+      type: object
+      required: [id, title, description, area, ownerName, ownerAvatarUrl, status, interestedCount, interested]
+      description: O payload contém somente a contagem agregada e o interesse da própria sessão; nunca contém a lista de interessados.
+      properties:
+        id: { type: integer, format: int64 }
+        title: { type: string }
+        description: { type: string }
+        area: { type: string }
+        ownerName: { type: string }
+        ownerAvatarUrl: { type: string, description: Avatar público do responsável pelo projeto; vazio quando não houver foto. }
+        status: { type: string, enum: [ABERTO] }
+        interestedCount: { type: integer, minimum: 0 }
+        interested: { type: boolean, description: Interesse da conta autenticada }

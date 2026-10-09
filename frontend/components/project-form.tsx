@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { FolderPlus, ListChecks, Plus, Trash2 } from "lucide-react"
+import { FolderPlus } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
-import { SkillLevelBadge } from "@/components/skill-level-badge"
+import { AiDescriptionAssistant } from "@/components/ai-description-assistant"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -17,35 +17,10 @@ import {
   Field,
   FieldGroup,
   FieldLabel,
-  FieldLegend,
-  FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  SKILL_LEVELS,
-  type Project,
-  type Requirement,
-  type SkillLevel,
-} from "@/lib/types"
-
-let reqCounter = 0
-function newReqId() {
-  reqCounter += 1
-  return `new-req-${Date.now()}-${reqCounter}`
-}
-
-function emptyRequirement(): Requirement {
-  return { id: newReqId(), name: "", minLevel: "Intermediário" }
-}
+import type { Project } from "@/lib/types"
 
 interface ProjectFormProps {
   project?: Project
@@ -57,9 +32,6 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
   const { addProject, updateProject, projects, currentProfile } = useApp()
   const [title, setTitle] = useState(project?.title ?? "")
   const [description, setDescription] = useState(project?.description ?? "")
-  const [requirements, setRequirements] = useState<Requirement[]>(
-    project?.requirements.length ? project.requirements : [emptyRequirement()]
-  )
   const [justPublished, setJustPublished] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -69,29 +41,12 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
   useEffect(() => {
     setTitle(project?.title ?? "")
     setDescription(project?.description ?? "")
-    setRequirements(project?.requirements.length ? project.requirements : [emptyRequirement()])
     setJustPublished(null)
     setError("")
   }, [project])
 
-  function updateRequirement(id: string, patch: Partial<Requirement>) {
-    setRequirements((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
-    )
-    setJustPublished(null)
-  }
-
-  function addRequirement() {
-    setRequirements((prev) => [...prev, emptyRequirement()])
-  }
-
-  function removeRequirement(id: string) {
-    setRequirements((prev) => prev.filter((r) => r.id !== id))
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const cleaned = Array.from(new Map(requirements.filter((r) => r.name.trim() !== "").map((r) => [r.name.trim().toLowerCase(), { ...r, name: r.name.trim() }])).values())
     setSaving(true)
     setError("")
     try {
@@ -99,7 +54,6 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
         id: project?.id ?? `new-project-${Date.now()}`,
         title: title.trim(),
         description: description.trim(),
-        requirements: cleaned,
         area: project?.area ?? "",
         ownerName: project?.ownerName,
         ownerEmail: project?.ownerEmail,
@@ -112,7 +66,6 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
       if (!editing) {
         setTitle("")
         setDescription("")
-        setRequirements([emptyRequirement()])
       }
       onSaved?.(persisted)
     } catch (reason) {
@@ -130,8 +83,8 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
               <CardTitle>{editing ? "Editar projeto" : "Publicar novo projeto ou pesquisa"}</CardTitle>
             <CardDescription>
               {editing
-                ? "Atualize os dados e as skills exigidas deste projeto."
-                : "Descreva a oportunidade e defina as skills exigidas para que o time possa se candidatar."}
+                ? "Atualize o título e a descrição completa desta oportunidade."
+                : "Descreva a oportunidade com contexto, responsabilidades, resultados esperados e critérios relevantes."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -162,97 +115,18 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
                   }}
                   required
                 />
+                <div>
+                  <AiDescriptionAssistant
+                    contextType="VACANCY"
+                    value={description}
+                    onApply={(text) => {
+                      setDescription(text)
+                      setJustPublished(null)
+                    }}
+                  />
+                </div>
               </Field>
             </FieldGroup>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ListChecks className="size-5 text-primary" />
-              Campos de exigência
-            </CardTitle>
-            <CardDescription>
-              Liste as skills necessárias e o nível mínimo desejado para cada uma.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FieldSet>
-              <FieldLegend variant="label" className="sr-only">
-                Skills exigidas
-              </FieldLegend>
-              <div className="flex flex-col gap-3">
-                {requirements.map((req) => (
-                  <div
-                    key={req.id}
-                    className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:flex-row sm:items-end"
-                  >
-                    <Field className="flex-1">
-                      <FieldLabel htmlFor={`req-${req.id}`}>
-                        Skill exigida
-                      </FieldLabel>
-                      <Input
-                        id={`req-${req.id}`}
-                        placeholder="Ex.: React, Python, SQL"
-                        value={req.name}
-                        onChange={(e) =>
-                          updateRequirement(req.id, { name: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field className="sm:w-48">
-                      <FieldLabel htmlFor={`req-level-${req.id}`}>
-                        Nível mínimo
-                      </FieldLabel>
-                      <Select
-                        value={req.minLevel}
-                        onValueChange={(value) =>
-                          updateRequirement(req.id, {
-                            minLevel: value as SkillLevel,
-                          })
-                        }
-                      >
-                        <SelectTrigger
-                          id={`req-level-${req.id}`}
-                          className="w-full"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {SKILL_LEVELS.map((level) => (
-                              <SelectItem key={level} value={level}>
-                                {level}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => removeRequirement(req.id)}
-                      aria-label={`Remover exigência ${req.name || ""}`}
-                    >
-                      <Trash2 data-icon="inline-start" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-fit"
-                onClick={addRequirement}
-              >
-                <Plus data-icon="inline-start" />
-                Adicionar exigência
-              </Button>
-            </FieldSet>
           </CardContent>
         </Card>
 
@@ -292,11 +166,7 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
                 <p className="text-sm font-medium leading-snug">
                   {project.title}
                 </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {project.requirements.map((r) => (
-                    <SkillLevelBadge key={r.id} level={r.minLevel} label={r.name} />
-                  ))}
-                </div>
+                <p className="line-clamp-3 text-sm text-muted-foreground">{project.description}</p>
               </div>
             ))}
           </CardContent>

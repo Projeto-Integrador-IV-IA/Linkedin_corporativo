@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Plus, Save, Sparkles, Trash2 } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
-import { SkillLevelBadge } from "@/components/skill-level-badge"
+import { AiDescriptionAssistant } from "@/components/ai-description-assistant"
 import { ProfileAvatar } from "@/components/profile-avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,24 +22,11 @@ import {
   FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { SKILL_LEVELS, type Profile, type Skill, type SkillLevel } from "@/lib/types"
+import type { Profile } from "@/lib/types"
 
-let skillCounter = 0
 let portfolioCounter = 0
-function newSkillId() {
-  skillCounter += 1
-  return `new-skill-${Date.now()}-${skillCounter}`
-}
 
 function newPortfolioId() {
   portfolioCounter += 1
@@ -62,27 +49,6 @@ export function ProfileForm() {
     setSaved(false)
   }
 
-  function updateSkill(id: string, patch: Partial<Skill>) {
-    update(
-      "skills",
-      draft.skills.map((s) => (s.id === id ? { ...s, ...patch } : s))
-    )
-  }
-
-  function addSkill() {
-    update("skills", [
-      ...draft.skills,
-      { id: newSkillId(), name: "", level: "Intermediário" satisfies SkillLevel },
-    ])
-  }
-
-  function removeSkill(id: string) {
-    update(
-      "skills",
-      draft.skills.filter((s) => s.id !== id)
-    )
-  }
-
   function updatePortfolio(id: string, patch: Partial<NonNullable<Profile["portfolioProjects"]>[number]>) {
     update("portfolioProjects", (draft.portfolioProjects ?? []).map((item) => item.id === id ? { ...item, ...patch } : item))
   }
@@ -90,7 +56,7 @@ export function ProfileForm() {
   function addPortfolio() {
     update("portfolioProjects", [
       ...(draft.portfolioProjects ?? []),
-      { id: newPortfolioId(), title: "", description: "", technologies: "" },
+      { id: newPortfolioId(), title: "", description: "" },
     ])
   }
 
@@ -122,7 +88,6 @@ export function ProfileForm() {
       const persisted = await saveCurrentProfile({
         ...draft,
         email: authUser?.email ?? draft.email?.trim() ?? "",
-        skills: draft.skills.filter((s) => s.name.trim() !== ""),
       })
       setDraft(persisted)
       setSaved(true)
@@ -188,6 +153,23 @@ export function ProfileForm() {
                   onChange={(e) => update("education", e.target.value)}
                 />
               </Field>
+              <Field>
+                <FieldLabel htmlFor="professional-description">Descrição profissional</FieldLabel>
+                <Textarea
+                  id="professional-description"
+                  rows={5}
+                  placeholder="Resuma sua atuação, especialidades, experiências e resultados profissionais."
+                  value={draft.projects}
+                  onChange={(event) => update("projects", event.target.value)}
+                />
+                <div>
+                  <AiDescriptionAssistant
+                    contextType="PROFILE"
+                    value={draft.projects}
+                    onApply={(text) => update("projects", text)}
+                  />
+                </div>
+              </Field>
               <FieldSet>
                 <FieldLegend variant="label">Projetos realizados</FieldLegend>
                 <p className="text-sm text-muted-foreground">Adicione vários projetos. Projetos aceitos em vagas entram automaticamente nesta lista.</p>
@@ -205,10 +187,15 @@ export function ProfileForm() {
                       <Field>
                         <FieldLabel htmlFor={`portfolio-description-${project.id}`}>Descrição</FieldLabel>
                         <Textarea id={`portfolio-description-${project.id}`} rows={2} placeholder="Descreva sua atuação" value={project.description} onChange={(event) => updatePortfolio(project.id, { description: event.target.value })} readOnly={Boolean(project.sourceProjectId)} />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor={`portfolio-technologies-${project.id}`}>Tecnologias e skills</FieldLabel>
-                        <Input id={`portfolio-technologies-${project.id}`} placeholder="Ex.: React, Python, PostgreSQL" value={project.technologies} onChange={(event) => updatePortfolio(project.id, { technologies: event.target.value })} readOnly={Boolean(project.sourceProjectId)} />
+                        {!project.sourceProjectId && (
+                          <div>
+                            <AiDescriptionAssistant
+                              contextType="PORTFOLIO"
+                              value={project.description}
+                              onApply={(text) => updatePortfolio(project.id, { description: text })}
+                            />
+                          </div>
+                        )}
                       </Field>
                     </div>
                   ))}
@@ -227,94 +214,6 @@ export function ProfileForm() {
                 </div>
               </Field>
             </FieldGroup>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Skills e conhecimentos</CardTitle>
-            <CardDescription>
-              Adicione suas habilidades e defina o nível de proficiência em cada
-              uma.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FieldSet>
-              <FieldLegend variant="label" className="sr-only">
-                Lista de skills
-              </FieldLegend>
-              <div className="flex flex-col gap-3">
-                {draft.skills.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhuma skill adicionada ainda.
-                  </p>
-                )}
-                {draft.skills.map((skill) => (
-                  <div
-                    key={skill.id}
-                    className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:flex-row sm:items-end"
-                  >
-                    <Field className="flex-1">
-                      <FieldLabel htmlFor={`skill-${skill.id}`}>
-                        Habilidade
-                      </FieldLabel>
-                      <Input
-                        id={`skill-${skill.id}`}
-                        placeholder="Ex.: React, Python, SQL"
-                        value={skill.name}
-                        onChange={(e) =>
-                          updateSkill(skill.id, { name: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field className="sm:w-48">
-                      <FieldLabel htmlFor={`level-${skill.id}`}>Nível</FieldLabel>
-                      <Select
-                        value={skill.level}
-                        onValueChange={(value) =>
-                          updateSkill(skill.id, { level: value as SkillLevel })
-                        }
-                      >
-                        <SelectTrigger
-                          id={`level-${skill.id}`}
-                          className="w-full"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {SKILL_LEVELS.map((level) => (
-                              <SelectItem key={level} value={level}>
-                                {level}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => removeSkill(skill.id)}
-                      aria-label={`Remover ${skill.name || "skill"}`}
-                    >
-                      <Trash2 data-icon="inline-start" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-fit"
-                onClick={addSkill}
-              >
-                <Plus data-icon="inline-start" />
-                Adicionar skill
-              </Button>
-            </FieldSet>
           </CardContent>
         </Card>
 
@@ -358,24 +257,10 @@ export function ProfileForm() {
             )}
             <Separator />
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">Skills</p>
-              <div className="flex flex-wrap gap-1.5">
-                {draft.skills.filter((s) => s.name.trim()).length === 0 ? (
-                  <span className="text-sm text-muted-foreground">
-                    Adicione skills para exibi-las aqui.
-                  </span>
-                ) : (
-                  draft.skills
-                    .filter((s) => s.name.trim())
-                    .map((s) => (
-                      <SkillLevelBadge
-                        key={s.id}
-                        level={s.level}
-                        label={s.name}
-                      />
-                    ))
-                )}
-              </div>
+              <p className="text-sm font-medium">Descrição profissional</p>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                {draft.projects || "Adicione uma descrição profissional para melhorar sua apresentação e o matching."}
+              </p>
             </div>
           </CardContent>
         </Card>

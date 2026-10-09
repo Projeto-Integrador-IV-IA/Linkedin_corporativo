@@ -22,6 +22,7 @@ public class Profile {
     private String profession;
     private String educationLevel;
     private Integer yearsOfExperience;
+    @Column(columnDefinition = "TEXT")
     private String bio;
     @Column(columnDefinition = "TEXT")
     private String avatarUrl;

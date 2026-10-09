@@ -1,0 +1,97 @@
+openapi: 3.0.3
+info:
+  title: Admin LLM Metrics API
+  version: 1.0.0
+  description: Métricas agregadas de consumo, desempenho, custo e projeção das chamadas LLM.
+paths:
+  /api/admin/metrics:
+    get:
+      summary: Retorna o dashboard de uso das LLMs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          description: Janela histórica entre 1 e 365 dias.
+          schema: { type: integer, minimum: 1, maximum: 365, default: 30 }
+      responses:
+        '200':
+          description: Totais, projeção do mês, série diária e agrupamentos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+        '401': { description: Token ausente ou inválido }
+        '403': { description: A conta não possui o papel ADMIN }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Summary:
+      type: object
+      required: [requests, successfulRequests, failedRequests, successRate, inputTokens, outputTokens, cachedContextTokens, reasoningTokens, totalTokens, averageTokensPerRequest, averageLatencyMs, uniqueUsers, estimatedCostUsd]
+      properties:
+        requests: { type: integer, format: int64 }
+        successfulRequests: { type: integer, format: int64 }
+        failedRequests: { type: integer, format: int64 }
+        successRate: { type: number, format: double }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        cachedContextTokens: { type: integer, format: int64 }
+        reasoningTokens: { type: integer, format: int64 }
+        totalTokens: { type: integer, format: int64 }
+        averageTokensPerRequest: { type: number, format: double }
+        averageLatencyMs: { type: number, format: double }
+        uniqueUsers: { type: integer }
+        estimatedCostUsd: { type: number }
+    Breakdown:
+      type: object
+      required: [label, metrics]
+      properties:
+        label: { type: string }
+        metrics: { $ref: '#/components/schemas/Summary' }
+    Dashboard:
+      type: object
+      required: [generatedAt, timeZone, periodDays, periodStart, periodEnd, totals, currentMonth, daily, byContext, byProvider, byRequestType, pricing]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        timeZone: { type: string, example: America/Sao_Paulo }
+        periodDays: { type: integer }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        totals: { $ref: '#/components/schemas/Summary' }
+        currentMonth:
+          type: object
+          properties:
+            actual: { $ref: '#/components/schemas/Summary' }
+            projectedRequests: { type: integer, format: int64 }
+            projectedTotalTokens: { type: integer, format: int64 }
+            projectedCostUsd: { type: number }
+            elapsedDays: { type: integer }
+            daysInMonth: { type: integer }
+            remainingDays: { type: integer }
+        daily:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              metrics: { $ref: '#/components/schemas/Summary' }
+        byContext:
+          type: array
+          items: { $ref: '#/components/schemas/Breakdown' }
+        byProvider:
+          type: array
+          items: { $ref: '#/components/schemas/Breakdown' }
+        byRequestType:
+          type: array
+          items: { $ref: '#/components/schemas/Breakdown' }
+        pricing:
+          type: object
+          properties:
+            configured: { type: boolean }
+            currency: { type: string, enum: [USD] }
+            inputPerMillion: { type: number }
+            outputPerMillion: { type: number }

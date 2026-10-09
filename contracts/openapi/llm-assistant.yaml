@@ -1,0 +1,121 @@
+openapi: 3.0.3
+info:
+  title: Description Assistant API
+  version: 1.0.0
+  description: Fluxo autenticado de escrita assistida para vaga, perfil e portfólio.
+paths:
+  /api/ai/descriptions/sessions:
+    post:
+      summary: Inicia uma sessão e a janela de uso de 24 horas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartRequest'
+      responses:
+        '201':
+          description: Perguntas iniciais
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '429':
+          description: A conta ainda está na janela de 24 horas
+  /api/ai/descriptions/sessions/{sessionId}/generate:
+    post:
+      summary: Gera uma das três versões permitidas
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string, minLength: 20, maxLength: 8000 }
+                answers:
+                  type: array
+                  maxItems: 5
+                  items: { type: string }
+      responses:
+        '200':
+          description: Texto reformulado para revisão humana
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '409':
+          description: Três versões já foram geradas
+  /api/ai/descriptions/sessions/{sessionId}/continue:
+    post:
+      summary: Solicita menos perguntas para a próxima versão
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string, minLength: 20, maxLength: 8000 }
+      responses:
+        '200':
+          description: Nova rodada de perguntas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+  /api/ai/descriptions/sessions/{sessionId}/finish:
+    post:
+      summary: Finaliza com texto aceito ou editado
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, text]
+              properties:
+                action: { type: string, enum: [ACCEPT, EDIT] }
+                text: { type: string, minLength: 20, maxLength: 8000 }
+      responses:
+        '200':
+          description: Sessão concluída
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+components:
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+  schemas:
+    StartRequest:
+      type: object
+      required: [contextType, text]
+      properties:
+        contextType: { type: string, enum: [VACANCY, PROFILE, PORTFOLIO] }
+        text: { type: string, minLength: 20, maxLength: 8000 }
+    Session:
+      type: object
+      required: [sessionId, contextType, status, versionCount, maxVersions, text, questions, canContinue, availableAt]
+      properties:
+        sessionId: { type: integer, format: int64 }
+        contextType: { type: string, enum: [VACANCY, PROFILE, PORTFOLIO] }
+        status: { type: string, enum: [QUESTIONS, REVIEW, COMPLETED] }
+        versionCount: { type: integer, minimum: 0, maximum: 3 }
+        maxVersions: { type: integer, enum: [3] }
+        text: { type: string }
+        questions:
+          type: array
+          items: { type: string }
+        canContinue: { type: boolean }
+        availableAt: { type: string, format: date-time }
