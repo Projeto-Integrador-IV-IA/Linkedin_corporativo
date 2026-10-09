@@ -16,7 +16,9 @@ FROM eclipse-temurin:21-jre
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --shell /usr/sbin/nologin appuser
+    && useradd --create-home --shell /usr/sbin/nologin appuser \
+    && mkdir -p /app/uploads \
+    && chown -R appuser:appuser /app
 
 WORKDIR /app
 COPY --from=build /workspace/target/*.jar /app/app.jar

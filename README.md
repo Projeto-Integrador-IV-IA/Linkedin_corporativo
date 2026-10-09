@@ -2,6 +2,10 @@
 
 Plataforma de matching interno entre colaboradores e vagas/projetos, com recomendação assistida por Machine Learning.
 
+O projeto também oferece escrita assistida por LLM nas descrições de vagas,
+perfil profissional e projetos do portfólio. O provedor pode ser Gemini ou
+NVIDIA e é configurado somente no backend.
+
 O repositório usa uma arquitetura monorepo: cada equipe trabalha em uma área própria, e a integração acontece por APIs documentadas em `contracts/`.
 
 ## Arquitetura
@@ -19,6 +23,8 @@ API Gateway :8080
                                   +--> Profile Service
                                   +--> Project Service
                                   +--> ML Engine :8000
+   |
+   +--> Profile Service ------> Redis (cache)
 ```
 
 O frontend deve acessar apenas o API Gateway. Os demais serviços conversam pela rede interna do Docker e não são publicados no computador do desenvolvedor.
@@ -30,14 +36,14 @@ O frontend deve acessar apenas o API Gateway. Os demais serviços conversam pela
 ├── frontend/                 # aplicação web do gestor e colaborador
 ├── services/
 │   ├── api-gateway/          # entrada pública da aplicação
-│   ├── profile-service/      # perfis, skills e experiências
+│   ├── profile-service/      # perfis, descrições e portfólio
 │   ├── project-service/      # projetos, vagas e requisitos
 │   ├── match-orchestrator/   # orquestração do fluxo de matching
 │   └── ml-engine/            # inferência Python/FastAPI
 ├── ml/                       # dataset, treinamento e versionamento de modelos
 ├── contracts/                # contratos OpenAPI e schemas entre equipes
 ├── docker/                   # Dockerfiles compartilhados e documentação de infra
-├── docs/                     # decisões e documentação de arquitetura
+├── docs/                     # arquitetura, funcionalidades e APIs
 ├── scripts/                  # scripts auxiliares de desenvolvimento
 ├── docker-compose.yml        # ambiente local oficial
 ├── .env.example              # modelo de variáveis locais
@@ -52,6 +58,9 @@ As regras específicas de cada área estão nos READMEs:
 - [Contratos de integração](contracts/README.md)
 - [Docker e infraestrutura](docker/README.md)
 - [Arquitetura e decisões](docs/architecture.md)
+- [Funcionalidades do MVP](docs/features.md)
+- [API e fluxos de integração](docs/api.md)
+- [Deploy no Dokploy](docs/deploy-dokploy.md)
 
 ## Executar localmente
 
@@ -68,11 +77,31 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Antes de usar o assistente, configure em `.env` `LLM_PROVIDER`, `LLM_API_KEY` e
+`LLM_MODEL`. Use `LLM_PROVIDER=mock` apenas para desenvolver a interface sem
+consumir uma API externa.
+
+Para habilitar o painel administrativo, defina `ADMIN_EMAIL` e uma
+`ADMIN_PASSWORD` com pelo menos oito caracteres. `LLM_INPUT_COST_PER_MILLION`
+e `LLM_OUTPUT_COST_PER_MILLION` alimentam as estimativas em USD e podem
+permanecer em zero enquanto o uso estiver na cota gratuita. A conta `ADMIN` é provisionada
+na inicialização e não aparece como opção no cadastro público.
+
+`MATCH_INTEREST_BOOST_POINTS` define quantos pontos o interesse declarado
+acrescenta ao score textual no Match Orchestrator. O padrão local é 10 e o
+score final permanece limitado a 100.
+
+Após a subida do ambiente, acesse a aplicação em `http://localhost:3000`. O
+frontend usa o API Gateway em `http://localhost:8080`; os serviços internos e
+os bancos PostgreSQL e o Redis permanecem na rede do Compose. Na primeira
+execução, crie contas profissionais e de recrutador pela tela de login.
+
 Verificar o ambiente:
 
 ```bash
 docker compose ps
 curl http://localhost:8080/actuator/health
+curl http://localhost:8080/health/dependencies
 ```
 
 Serviços disponíveis no host:
@@ -84,6 +113,7 @@ Serviços disponíveis no host:
 | Project Service | `project-service:8082` | acessível somente na rede Docker |
 | Match Orchestrator | `match-orchestrator:8083` | acessível somente na rede Docker |
 | ML Engine | `ml-engine:8000` | acessível somente na rede Docker |
+| Redis | `redis:6379` | cache interno do Profile Service; não é publicado no host |
 
 Para parar os containers sem remover os dados:
 
@@ -93,66 +123,21 @@ docker compose down
 
 Para recriar também os bancos locais, use `docker compose down -v`. Esse comando remove os volumes e apaga os dados de desenvolvimento.
 
-## Profiles do Docker Compose
+## Serviços executados pelo Compose
 
-Profiles são grupos opcionais de serviços. Os serviços essenciais não possuem profile e sobem normalmente com `docker compose up`. Serviços auxiliares só são iniciados quando o profile correspondente é ativado.
-
-### Sem profile
-
-Serviços essenciais do ambiente:
+O MVP atual sobe todos os serviços essenciais com um único comando:
 
 - API Gateway;
-- Profile Service;
-- Project Service;
-- Match Orchestrator;
+- frontend Next.js;
+- Profile Service e `profile-db`;
+- Project Service e `project-db`;
+- Match Orchestrator e `match-db`;
 - ML Engine;
-- bancos PostgreSQL.
+- Redis, usado como cache de perfis.
 
-```bash
-docker compose up --build
-```
-
-### Profile `ml`
-
-Serviços relacionados ao treinamento e ao acompanhamento dos modelos:
-
-- MLflow;
-- banco ou volume do MLflow;
-- ferramentas de treinamento.
-
-```bash
-docker compose --profile ml up --build
-```
-
-### Profile `automation`
-
-Serviços de automação e monitoramento:
-
-- n8n;
-- serviços de monitoramento.
-
-```bash
-docker compose --profile automation up
-```
-
-### Profile `debug`
-
-Ferramentas usadas apenas para desenvolvimento e diagnóstico:
-
-- ferramentas administrativas;
-- publicação temporária das portas internas.
-
-```bash
-docker compose --profile debug up
-```
-
-É possível ativar mais de um profile ao mesmo tempo:
-
-```bash
-docker compose --profile ml --profile automation up
-```
-
-Os profiles `ml`, `automation` e `debug` serão adicionados ao Compose conforme seus serviços forem implementados. Eles não devem ser necessários para executar o MVP principal.
+O Redis tem volume persistente, TTL de 60 segundos e fallback para o
+PostgreSQL quando estiver indisponível. Os dados de negócio continuam nos
+bancos PostgreSQL; o Redis não é a fonte de verdade.
 
 ## Regras de integração
 
@@ -174,14 +159,16 @@ Cada alteração deve ser feita por Pull Request. Evite commits simultâneos no 
 
 ## Issues e roadmap
 
-O roadmap está organizado nas Issues do GitHub. A ordem técnica recomendada é:
+O MVP integrado já cobre o fluxo principal. O roadmap de evolução fica
+organizado nas Issues do GitHub; a ordem recomendada para próximos incrementos
+é:
 
-1. contratos e migrations;
-2. serviços de perfil e projeto;
-3. API Gateway;
-4. ML Engine e pipeline de treinamento;
-5. integração pelo Match Orchestrator;
-6. frontend/dashboard;
-7. feedback, retreinamento e monitoramento.
+1. substituir polling por WebSocket ou SSE;
+2. mover avatars para armazenamento de objetos;
+3. adicionar push/e-mail e observabilidade de notificações;
+4. ampliar feedback e retreinamento do ranker;
+5. criar testes automatizados de contrato e ponta a ponta;
+6. adicionar métricas, tracing e políticas de produção.
 
-O MVP precisa validar o fluxo completo, mas cada equipe deve conseguir executar e testar sua área isoladamente.
+Cada equipe deve conseguir executar e testar sua área isoladamente, seguindo
+as documentações específicas e os contratos compartilhados.

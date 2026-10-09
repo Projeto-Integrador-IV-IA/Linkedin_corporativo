@@ -27,3 +27,6 @@ services:
   profile-url: ${PROFILE_SERVICE_URL:http://profile-service:8081}
   project-url: ${PROJECT_SERVICE_URL:http://project-service:8082}
   ml-engine-url: ${ML_ENGINE_URL:http://ml-engine:8000}
+
+matching:
+  interest-boost-points: ${MATCH_INTEREST_BOOST_POINTS:10}
