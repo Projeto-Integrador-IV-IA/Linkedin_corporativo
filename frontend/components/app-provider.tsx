@@ -19,7 +19,7 @@ import {
   updateProfile,
   updatePortfolioProject,
 } from "@/lib/api"
-import type { AuthRole, AuthUser } from "@/lib/api"
+import type { AuthUser } from "@/lib/api"
 import type { Profile, Project } from "@/lib/types"
 import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound"
 
@@ -47,7 +47,8 @@ interface AppContextValue {
   authLoading: boolean
   unreadChats: number
   login: (email: string, password: string) => Promise<AuthUser>
-  register: (email: string, password: string, displayName: string, role: AuthRole) => Promise<AuthUser>
+  register: (email: string, password: string, displayName: string) => Promise<AuthUser>
+  replaceAuthUser: (user: AuthUser) => void
   logout: () => void
 }
 
@@ -163,10 +164,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return user
   }
 
-  async function register(email: string, password: string, displayName: string, role: AuthRole) {
-    const user = await registerRequest(email, password, displayName, role)
+  async function register(email: string, password: string, displayName: string) {
+    const user = await registerRequest(email, password, displayName)
     setAuthUser(user)
     return user
+  }
+
+  function replaceAuthUser(user: AuthUser) {
+    setAuthUser(user)
   }
 
   function logout() {
@@ -242,9 +247,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       authUser,
       authLoading,
       unreadChats,
-      login,
-      register,
-      logout,
+    login,
+    register,
+    replaceAuthUser,
+    logout,
     }),
     [profiles, projects, currentProfile, loading, error, authUser, authLoading, unreadChats]
   )

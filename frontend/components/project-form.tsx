@@ -11,13 +11,9 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from "@/components/ui/card"
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { Project } from "@/lib/types"
@@ -57,19 +53,25 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
         area: project?.area ?? "",
         ownerName: project?.ownerName,
         ownerEmail: project?.ownerEmail,
-        status: project?.status,
+        status: project?.status
       }
       const persisted = editing
         ? await updateProject(savedProject, project!)
         : await addProject(savedProject)
-      setJustPublished(editing ? "Projeto atualizado com sucesso." : title.trim())
+      setJustPublished(
+        editing ? "Projeto atualizado com sucesso." : title.trim()
+      )
       if (!editing) {
         setTitle("")
         setDescription("")
       }
       onSaved?.(persisted)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Não foi possível publicar o projeto.")
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível publicar o projeto."
+      )
     } finally {
       setSaving(false)
     }
@@ -79,8 +81,15 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <Card>
-          <CardHeader>
-              <CardTitle>{editing ? "Editar projeto" : "Publicar novo projeto ou pesquisa"}</CardTitle>
+          <CardHeader className="border-b pb-5">
+            <span className="eyebrow mb-2 text-primary">
+              SOBRE A OPORTUNIDADE
+            </span>
+            <CardTitle className="text-xl font-semibold tracking-tight">
+              {editing
+                ? "Cada detalhe, no lugar certo."
+                : "O que vamos construir?"}
+            </CardTitle>
             <CardDescription>
               {editing
                 ? "Atualize o título e a descrição completa desta oportunidade."
@@ -130,7 +139,7 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
           </CardContent>
         </Card>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel}>
               Cancelar
@@ -138,19 +147,27 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
           )}
           <Button type="submit" disabled={saving || !currentProfile.email}>
             <FolderPlus data-icon="inline-start" />
-            {saving ? "Salvando..." : editing ? "Salvar alterações" : "Publicar projeto"}
+            {saving
+              ? "Salvando..."
+              : editing
+                ? "Salvar alterações"
+                : "Publicar projeto"}
           </Button>
           {justPublished && (
             <span className="text-sm font-medium text-chart-3">
               &quot;{justPublished}&quot; publicado com sucesso.
             </span>
           )}
-          {error && <span className="text-sm font-medium text-destructive">{error}</span>}
+          {error && (
+            <span className="text-sm font-medium text-destructive">
+              {error}
+            </span>
+          )}
         </div>
       </form>
 
       <div className="flex flex-col gap-4">
-        <Card className="lg:sticky lg:top-6">
+        <Card className="lg:sticky lg:top-24">
           <CardHeader>
             <CardTitle className="text-base">Projetos publicados</CardTitle>
             <CardDescription>
@@ -166,7 +183,9 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
                 <p className="text-sm font-medium leading-snug">
                   {project.title}
                 </p>
-                <p className="line-clamp-3 text-sm text-muted-foreground">{project.description}</p>
+                <p className="line-clamp-3 text-sm text-muted-foreground">
+                  {project.description}
+                </p>
               </div>
             ))}
           </CardContent>

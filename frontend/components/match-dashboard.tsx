@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BadgeCheck, Check, GraduationCap, Heart, MessageCircle, RefreshCw, Sparkles, Target, Users, X } from "lucide-react"
+import { BadgeCheck, Check, FilterX, GraduationCap, Heart, ListFilter, MessageCircle, RefreshCw, Sparkles, Target, Users, X } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
 import { ChatPanel } from "@/components/chat-panel"
@@ -41,18 +41,18 @@ function scoreTone(score: number) {
     return {
       text: "text-chart-3",
       bar: "[&_[data-slot=progress-indicator]]:bg-chart-3",
-      label: "Excelente match",
+      label: "Alta aderência",
     }
   if (score >= 50)
     return {
       text: "text-chart-4",
       bar: "[&_[data-slot=progress-indicator]]:bg-chart-4",
-      label: "Bom match",
+      label: "Aderência moderada",
     }
   return {
     text: "text-muted-foreground",
     bar: "[&_[data-slot=progress-indicator]]:bg-muted-foreground",
-    label: "Match parcial",
+    label: "Baixa aderência",
   }
 }
 
@@ -117,13 +117,13 @@ function CandidateCard({ result, decision, onChat, onDecision }: { result: Match
       <CardContent className="flex flex-1 flex-col gap-4">
         {result.interested ? (
           <Badge variant="secondary" className="w-fit gap-1.5 text-primary">
-            <Heart className="size-3 fill-current" /> Demonstrou interesse · +{result.interestBoost} pontos
+            <Heart className="size-3 fill-current" /> Demonstrou interesse
           </Badge>
         ) : null}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-muted-foreground">
-              Grau de compatibilidade
+              Índice de aderência textual
             </span>
             <span className={`text-2xl font-bold tabular-nums ${tone.text}`}>
               {score}%
@@ -134,7 +134,6 @@ function CandidateCard({ result, decision, onChat, onDecision }: { result: Match
             className={`[&_[data-slot=progress-track]]:h-2 ${tone.bar}`}
           />
           <span className={`text-xs font-medium ${tone.text}`}>{tone.label}</span>
-          {result.interested ? <span className="text-xs text-muted-foreground">Compatibilidade textual: {result.textScore}%</span> : null}
         </div>
 
         <p className="line-clamp-4 text-sm text-muted-foreground">
@@ -164,6 +163,10 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
   const [decisions, setDecisions] = useState<Record<string, CandidateDecision>>({})
   const [chat, setChat] = useState<{ conversation: ChatConversation; profile: Profile } | null>(null)
   const [recalculation, setRecalculation] = useState(0)
+  const [minScore, setMinScore] = useState("0")
+  const [interestFilter, setInterestFilter] = useState("all")
+  const [recommendationLimit, setRecommendationLimit] = useState("10")
+  const [filteredTotal, setFilteredTotal] = useState(0)
 
   const project = useMemo(
     () => projects.find((p) => p.id === (projectId ?? selectedId)) ?? projects[0],
@@ -177,15 +180,27 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
   useEffect(() => {
     if (!project || profiles.length === 0) {
       setCandidates([])
+      setAllCandidates([])
+      setFilteredTotal(0)
+      setLoading(false)
+      setError("")
       return
     }
 
     let active = true
     setLoading(true)
     setError("")
-    Promise.all([listRecommendations(project.id), listCandidateDecisions(project.id)])
+    Promise.all([
+      listRecommendations(project.id, {
+        minScore: Number(minScore),
+        interestedOnly: interestFilter === "interested",
+        limit: Number(recommendationLimit),
+      }),
+      listCandidateDecisions(project.id),
+    ])
       .then(([response, savedDecisions]) => {
         if (!active) return
+        setFilteredTotal(response.filteredTotal)
         const decisionMap = Object.fromEntries(savedDecisions.map((decision) => [decision.profileId, decision]))
         setDecisions(decisionMap)
         const mappedCandidates = response.results
@@ -198,7 +213,12 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
         setCandidates(mappedCandidates.filter((result) => decisionMap[result.profile.id]?.status !== "REJEITADO"))
       })
       .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Não foi possível calcular as recomendações.")
+        if (active) {
+          setCandidates([])
+          setAllCandidates([])
+          setFilteredTotal(0)
+          setError(reason instanceof Error ? reason.message : "Não foi possível calcular as recomendações.")
+        }
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -207,10 +227,16 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
     return () => {
       active = false
     }
-  }, [project, profiles, recalculation])
+  }, [project, profiles, recalculation, minScore, interestFilter, recommendationLimit])
 
   function recalculate() {
     if (!loading) setRecalculation((value) => value + 1)
+  }
+
+  function clearFilters() {
+    setMinScore("0")
+    setInterestFilter("all")
+    setRecommendationLimit("10")
   }
 
   async function openChat(profile: Profile) {
@@ -240,6 +266,12 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
   }
 
   const topScore = candidates[0]?.score ?? 0
+  const rejectedCandidates = Object.values(decisions).flatMap((decision) => {
+    if (decision.status !== "REJEITADO") return []
+    const result = allCandidates.find((item) => item.profile.id === decision.profileId)
+    const profile = result?.profile ?? profiles.find((item) => item.id === decision.profileId)
+    return profile ? [{ profile, score: result?.score }] : []
+  })
 
   if (!project) {
     return (
@@ -304,15 +336,78 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
         <CardContent className="flex flex-col gap-4">
           {!projectId && <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Target className="size-4 text-primary" />
-            Ranking calculado pelas descrições, com interesse declarado como sinal adicional configurável.
+            Ranking calculado exclusivamente pelas descrições. O índice apoia a comparação textual e não representa chance de contratação. O interesse declarado é apenas informativo.
           </div>}
+          <Separator />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="minimum-score-filter" className="text-sm font-medium">
+                Compatibilidade mínima
+              </label>
+              <Select value={minScore} onValueChange={(value) => setMinScore(value ?? "0")}>
+                <SelectTrigger id="minimum-score-filter" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="0">Qualquer compatibilidade</SelectItem>
+                    <SelectItem value="50">50% ou mais</SelectItem>
+                    <SelectItem value="80">80% ou mais</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="interest-filter" className="text-sm font-medium">
+                Interesse no projeto
+              </label>
+              <Select value={interestFilter} onValueChange={(value) => setInterestFilter(value ?? "all")}>
+                <SelectTrigger id="interest-filter" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">Todos os profissionais</SelectItem>
+                    <SelectItem value="interested">Somente interessados</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="recommendation-limit" className="text-sm font-medium">
+                Limite de recomendações
+              </label>
+              <Select value={recommendationLimit} onValueChange={(value) => setRecommendationLimit(value ?? "10")}>
+                <SelectTrigger id="recommendation-limit" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="5">Até 5 profissionais</SelectItem>
+                    <SelectItem value="10">Até 10 profissionais</SelectItem>
+                    <SelectItem value="20">Até 20 profissionais</SelectItem>
+                    <SelectItem value="50">Até 50 profissionais</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={clearFilters}
+              disabled={minScore === "0" && interestFilter === "all" && recommendationLimit === "10"}
+            >
+              <FilterX data-icon="inline-start" />
+              Limpar
+            </Button>
+          </div>
           <Separator />
           <div className="flex flex-wrap gap-6">
             <div className="flex items-center gap-2">
-              <Users className="size-4 text-muted-foreground" />
+              <ListFilter className="size-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">
                 <strong className="text-foreground">{candidates.length}</strong>{" "}
-                candidatos recomendados
+                exibidos de <strong className="text-foreground">{filteredTotal}</strong> que atendem aos filtros
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -334,22 +429,33 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
           <CandidateCard key={result.profile.id} result={result} decision={decisions[result.profile.id]} onChat={() => openChat(result.profile)} onDecision={(status) => decide(result.profile.id, status)} />
         ))}
       </div>
-      {Object.values(decisions).some((decision) => decision.status === "REJEITADO") && (
+      {!loading && !error && candidates.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
+            <Users className="size-5" />
+            <p>Nenhum profissional atende aos filtros selecionados.</p>
+            <Button type="button" variant="outline" size="sm" onClick={clearFilters}>Limpar filtros</Button>
+          </CardContent>
+        </Card>
+      )}
+      {rejectedCandidates.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Histórico de decisões</CardTitle>
             <CardDescription>Profissionais rejeitados não aparecem na lista principal, mas podem ser reconsiderados.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {allCandidates.filter((result) => decisions[result.profile.id]?.status === "REJEITADO").map((result) => (
-              <div key={result.profile.id} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+            {rejectedCandidates.map(({ profile, score }) => (
+              <div key={profile.id} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-medium">{result.profile.name}</p>
-                  <p className="text-sm text-muted-foreground">{result.profile.profession} · {result.score}% de compatibilidade</p>
+                  <p className="font-medium">{profile.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {profile.profession}{score !== undefined ? ` · ${score}% de compatibilidade` : ""}
+                  </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => decide(result.profile.id, "PENDENTE")}>Reconsiderar</Button>
-                  <Button size="sm" onClick={() => decide(result.profile.id, "ACEITO")}>Aceitar</Button>
+                  <Button size="sm" variant="outline" onClick={() => decide(profile.id, "PENDENTE")}>Reconsiderar</Button>
+                  <Button size="sm" onClick={() => decide(profile.id, "ACEITO")}>Aceitar</Button>
                 </div>
               </div>
             ))}

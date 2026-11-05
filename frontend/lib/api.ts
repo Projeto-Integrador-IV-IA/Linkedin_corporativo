@@ -161,11 +161,24 @@ export function updateProject(project: Project, owner: Profile) {
   }).then(mapProject)
 }
 
-export function listRecommendations(projectId: string) {
+export interface RecommendationFilters {
+  minScore?: number
+  interestedOnly?: boolean
+  limit?: number
+}
+
+export function listRecommendations(projectId: string, filters: RecommendationFilters = {}) {
+  const params = new URLSearchParams({
+    minScore: String(filters.minScore ?? 0),
+    interestedOnly: String(filters.interestedOnly ?? false),
+    limit: String(filters.limit ?? 10),
+  })
   return request<{
-    interestBoostPoints: number
-    results: { candidate_id: string; score: number; text_score: number; interest_boost: number; interested: boolean }[]
-  }>(`/matches/projects/${projectId}`)
+    totalResults: number
+    filteredTotal: number
+    limit: number
+    results: { candidate_id: string; score: number; interested: boolean }[]
+  }>(`/matches/projects/${projectId}?${params.toString()}`)
 }
 
 export interface FeedProject extends Project {
@@ -314,8 +327,6 @@ export interface AuthUser {
   token: string
 }
 
-export type AuthRole = "RECRUITER" | "CANDIDATE"
-
 function saveAuth(response: AuthUser) {
   if (typeof window !== "undefined" && response.token) window.localStorage.setItem("talentmatch_token", response.token)
   return { ...response, id: String(response.id), profileId: response.profileId ? String(response.profileId) : undefined }
@@ -325,11 +336,32 @@ export function login(email: string, password: string) {
   return request<AuthUser>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }).then(saveAuth)
 }
 
-export function register(email: string, password: string, displayName: string, role: AuthRole) {
+export function register(email: string, password: string, displayName: string) {
   return request<AuthUser>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, displayName, role }),
+    body: JSON.stringify({ email, password, displayName }),
   }).then(saveAuth)
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return request<AuthUser>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  }).then(saveAuth)
+}
+
+export function requestPasswordReset(email: string) {
+  return request<{ message: string }>("/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  })
+}
+
+export function confirmPasswordReset(token: string, newPassword: string) {
+  return request<{ message: string }>("/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword }),
+  })
 }
 
 export function me() {
@@ -459,8 +491,6 @@ export function toMatchResult(result: ApiMatch, profile: Profile): MatchResult {
   return {
     profile,
     score: Number(result.score ?? 0),
-    textScore: Number(result.text_score ?? result.score ?? 0),
-    interestBoost: Number(result.interest_boost ?? 0),
     interested: Boolean(result.interested),
   }
 }

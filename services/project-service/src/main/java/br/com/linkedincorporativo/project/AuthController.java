@@ -22,12 +22,24 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Credentials request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(view(auth.register(request.email(), request.password(), request.displayName(), request.role())));
+        return ResponseEntity.status(HttpStatus.CREATED).body(view(auth.register(request.email(), request.password(), request.displayName())));
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Credentials request) {
         return ResponseEntity.ok(view(auth.login(request.email(), request.password())));
+    }
+
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<?> requestPasswordReset(@RequestBody PasswordResetRequest request) {
+        auth.requestPasswordReset(request.email());
+        return ResponseEntity.accepted().body(Map.of("message", "Se existir uma conta com este e-mail, enviaremos as instruções de recuperação."));
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<?> resetPassword(@RequestBody PasswordResetConfirmation request) {
+        auth.resetPassword(request.token(), request.newPassword());
+        return ResponseEntity.ok(Map.of("message", "Senha redefinida com sucesso. Entre com sua nova senha."));
     }
 
     @GetMapping("/me")
@@ -44,6 +56,14 @@ public class AuthController {
         return ResponseEntity.ok(view(auth.linkProfile(user, request.profileId())));
     }
 
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestBody ChangePassword request
+    ) {
+        return ResponseEntity.ok(view(auth.changePassword(auth.authenticate(authorization), request.currentPassword(), request.newPassword())));
+    }
+
     private Map<String, Object> view(UserAccount user) {
         return Map.of(
             "id", user.getId(),
@@ -55,6 +75,9 @@ public class AuthController {
         );
     }
 
-    public record Credentials(String email, String password, String displayName, String role) {}
+    public record Credentials(String email, String password, String displayName) {}
     public record ProfileLink(Long profileId) {}
+    public record ChangePassword(String currentPassword, String newPassword) {}
+    public record PasswordResetRequest(String email) {}
+    public record PasswordResetConfirmation(String token, String newPassword) {}
 }

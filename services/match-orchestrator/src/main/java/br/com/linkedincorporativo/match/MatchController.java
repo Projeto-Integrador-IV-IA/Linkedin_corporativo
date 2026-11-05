@@ -22,6 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
@@ -30,11 +31,12 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/matches")
 public class MatchController {
+    private static final int MAX_RECOMMENDATION_LIMIT = 50;
+
     private final RestClient client = RestClient.create();
     private final String profileUrl;
     private final String projectUrl;
     private final String mlUrl;
-    private final double interestBoostPoints;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
         .version(HttpClient.Version.HTTP_1_1)
@@ -43,17 +45,22 @@ public class MatchController {
     public MatchController(
         @Value("${services.profile-url}") String profileUrl,
         @Value("${services.project-url}") String projectUrl,
-        @Value("${services.ml-engine-url}") String mlUrl,
-        @Value("${matching.interest-boost-points:10}") double interestBoostPoints
+        @Value("${services.ml-engine-url}") String mlUrl
     ) {
         this.profileUrl = profileUrl;
         this.projectUrl = projectUrl;
         this.mlUrl = mlUrl;
-        this.interestBoostPoints = Math.max(0, interestBoostPoints);
     }
 
     @GetMapping("/projects/{projectId}")
-    public ResponseEntity<?> recommend(@PathVariable Long projectId) throws JsonProcessingException, IOException, InterruptedException {
+    public ResponseEntity<?> recommend(
+        @PathVariable Long projectId,
+        @RequestParam(defaultValue = "0") double minScore,
+        @RequestParam(defaultValue = "false") boolean interestedOnly,
+        @RequestParam(defaultValue = "10") int limit
+    ) throws JsonProcessingException, IOException, InterruptedException {
+        double normalizedMinScore = Math.max(0, Math.min(100, minScore));
+        int normalizedLimit = Math.max(1, Math.min(MAX_RECOMMENDATION_LIMIT, limit));
         Map<String, Object> project = client.get().uri(projectUrl + "/api/projects/" + projectId)
             .header("X-Internal-Request", "match-orchestrator")
             .retrieve().body(new ParameterizedTypeReference<>() {});
@@ -91,21 +98,25 @@ public class MatchController {
             String candidateId = stringValue(raw.get("candidate_id"));
             double textScore = numberValue(raw.get("score"));
             boolean interested = interestedProfiles.contains(candidateId);
-            double appliedBoost = interested ? interestBoostPoints : 0;
-            double finalScore = Math.min(100, textScore + appliedBoost);
             Map<String, Object> ranked = new LinkedHashMap<>();
             ranked.put("candidate_id", candidateId);
-            ranked.put("score", round(finalScore));
-            ranked.put("text_score", round(textScore));
-            ranked.put("interest_boost", round(appliedBoost));
+            ranked.put("score", round(textScore));
             ranked.put("interested", interested);
             results.add(ranked);
         }
         results.sort(Comparator
             .comparingDouble((Map<String, Object> result) -> numberValue(result.get("score"))).reversed()
             .thenComparing(result -> stringValue(result.get("candidate_id"))));
+        int totalResults = results.size();
+        List<Map<String, Object>> filteredResults = results.stream()
+            .filter(result -> numberValue(result.get("score")) >= normalizedMinScore)
+            .filter(result -> !interestedOnly || Boolean.TRUE.equals(result.get("interested")))
+            .toList();
+        int filteredTotal = filteredResults.size();
+        List<Map<String, Object>> limitedResults = filteredResults.stream().limit(normalizedLimit).toList();
         return ResponseEntity.ok(Map.of("projectId", projectId, "projectTitle", stringValue(project.get("title")),
-            "interestBoostPoints", round(interestBoostPoints), "results", results));
+            "totalResults", totalResults, "filteredTotal", filteredTotal, "limit", normalizedLimit,
+            "results", limitedResults));
     }
 
     @SuppressWarnings("unchecked")

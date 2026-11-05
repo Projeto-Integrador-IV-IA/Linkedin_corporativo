@@ -73,22 +73,23 @@ associada ao recrutador que a criou e nunca é retornada ao outro participante.
    do portfólio de todos os profissionais.
 3. O payload exclusivamente textual é enviado ao ML Engine conforme o contrato OpenAPI.
 4. O ranker retorna scores ordenáveis.
-5. O orquestrador aplica o bônus configurável aos perfis que demonstraram
-   interesse e reordena o resultado, sem alterar o modelo textual.
-6. A interface exibe o score final, o score textual e o bônus de interesse.
+5. O orquestrador associa a cada resultado o estado de interesse, sem alterar
+   o score retornado pelo motor nem a ordenação.
+6. A interface exibe o score textual e um selo informativo de interesse.
 7. Aceitar/rejeitar grava uma decisão no Project Service; rejeitados são
    ocultados da lista ativa, mas permanecem no histórico.
 
 O score representa compatibilidade textual entre as descrições. Não é decisão
-de contratação nem previsão garantida de desempenho. O score final pode incluir
-o bônus explícito de interesse, limitado a 100 pontos.
+de contratação nem previsão garantida de desempenho. O interesse declarado é
+uma informação complementar e não compõe esse score.
 
 ## Fluxo de interesse
 
 O Project Service mantém uma relação única entre conta profissional e projeto.
 O endpoint do feed monta um DTO sanitizado com apenas a contagem agregada e o
 estado da própria sessão. A visão interna do projeto continua disponível ao
-Match Orchestrator para identificar os IDs de perfil que receberão o bônus.
+Match Orchestrator para identificar os perfis que demonstraram interesse e
+marcá-los na resposta sem modificar a pontuação.
 
 ## Assistentes de escrita
 

@@ -60,7 +60,7 @@ public class ProjectController {
         Project project = new Project();
         copy(request, project);
         if (currentUser == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Usuário não autenticado."));
-        if (!isRecruiter(currentUser)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Somente recrutadores podem publicar projetos."));
+        if (!canPublishProjects(currentUser)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Esta conta não pode publicar projetos."));
         project.setOwnerUserId(currentUser.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(view(projects.save(project)));
     }
@@ -135,12 +135,12 @@ public class ProjectController {
     private static boolean blank(String value) { return value == null || value.isBlank(); }
     private static boolean canManage(Project project, UserAccount currentUser) {
         if (currentUser == null) return true;
-        if (!isRecruiter(currentUser)) return false;
+        if (!canPublishProjects(currentUser)) return false;
         if (project.getOwnerUserId() != null) return project.getOwnerUserId().equals(currentUser.getId());
         return project.getOwnerEmail() != null && project.getOwnerEmail().equalsIgnoreCase(currentUser.getEmail());
     }
-    private static boolean isRecruiter(UserAccount user) {
-        return user != null && ("RECRUITER".equalsIgnoreCase(user.getRole()) || "MANAGER".equalsIgnoreCase(user.getRole()));
+    private static boolean canPublishProjects(UserAccount user) {
+        return user != null && !"ADMIN".equalsIgnoreCase(user.getRole());
     }
 
     private void claimLegacyOwnership(Project project, UserAccount currentUser) {

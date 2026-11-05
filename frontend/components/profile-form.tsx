@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Save, Sparkles, Trash2 } from "lucide-react"
+import { Check, Plus, Save, Sparkles, Trash2 } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
 import { AiDescriptionAssistant } from "@/components/ai-description-assistant"
@@ -12,14 +12,14 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from "@/components/ui/card"
 import {
   Field,
   FieldGroup,
   FieldLabel,
   FieldLegend,
-  FieldSet,
+  FieldSet
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
@@ -39,6 +39,26 @@ export function ProfileForm() {
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const profileSteps = [
+    {
+      label: "Nome e profissão",
+      complete: Boolean(draft.name.trim() && draft.profession.trim())
+    },
+    {
+      label: "Descrição profissional",
+      complete: Boolean(draft.projects.trim())
+    },
+    {
+      label: "Projetos no portfólio",
+      complete: Boolean(
+        draft.portfolioProjects?.some(
+          (project) => project.title.trim() && project.description.trim()
+        )
+      )
+    },
+    { label: "Foto de perfil", complete: Boolean(draft.avatarUrl) }
+  ]
+  const completion = profileSteps.filter((step) => step.complete).length * 25
 
   useEffect(() => {
     setDraft(currentProfile)
@@ -49,19 +69,30 @@ export function ProfileForm() {
     setSaved(false)
   }
 
-  function updatePortfolio(id: string, patch: Partial<NonNullable<Profile["portfolioProjects"]>[number]>) {
-    update("portfolioProjects", (draft.portfolioProjects ?? []).map((item) => item.id === id ? { ...item, ...patch } : item))
+  function updatePortfolio(
+    id: string,
+    patch: Partial<NonNullable<Profile["portfolioProjects"]>[number]>
+  ) {
+    update(
+      "portfolioProjects",
+      (draft.portfolioProjects ?? []).map((item) =>
+        item.id === id ? { ...item, ...patch } : item
+      )
+    )
   }
 
   function addPortfolio() {
     update("portfolioProjects", [
       ...(draft.portfolioProjects ?? []),
-      { id: newPortfolioId(), title: "", description: "" },
+      { id: newPortfolioId(), title: "", description: "" }
     ])
   }
 
   function removePortfolio(id: string) {
-    update("portfolioProjects", (draft.portfolioProjects ?? []).filter((item) => item.id !== id))
+    update(
+      "portfolioProjects",
+      (draft.portfolioProjects ?? []).filter((item) => item.id !== id)
+    )
   }
 
   function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
@@ -87,26 +118,35 @@ export function ProfileForm() {
     try {
       const persisted = await saveCurrentProfile({
         ...draft,
-        email: authUser?.email ?? draft.email?.trim() ?? "",
+        email: authUser?.email ?? draft.email?.trim() ?? ""
       })
       setDraft(persisted)
       setSaved(true)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Não foi possível salvar o perfil.")
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível salvar o perfil."
+      )
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1fr_320px]">
+    <form
+      onSubmit={handleSubmit}
+      className="grid gap-6 lg:grid-cols-[1fr_320px]"
+    >
       <div className="flex flex-col gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Dados profissionais</CardTitle>
+          <CardHeader className="border-b pb-5">
+            <span className="eyebrow mb-2 text-primary">01 / APRESENTAÇÃO</span>
+            <CardTitle className="text-xl font-semibold tracking-tight">
+              A pessoa por trás da experiência
+            </CardTitle>
             <CardDescription>
-              Mantenha seu perfil atualizado para melhorar as recomendações do
-              motor de correlação.
+              Um perfil bem apresentado abre espaço para conversas melhores.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -142,7 +182,10 @@ export function ProfileForm() {
                   disabled
                   required
                 />
-                <p className="text-xs text-muted-foreground">O e-mail do perfil é o mesmo usado no login e não pode ser alterado aqui.</p>
+                <p className="text-xs text-muted-foreground">
+                  O e-mail do perfil é o mesmo usado no login e não pode ser
+                  alterado aqui.
+                </p>
               </Field>
               <Field>
                 <FieldLabel htmlFor="education">Escolaridade</FieldLabel>
@@ -154,7 +197,9 @@ export function ProfileForm() {
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="professional-description">Descrição profissional</FieldLabel>
+                <FieldLabel htmlFor="professional-description">
+                  Descrição profissional
+                </FieldLabel>
                 <Textarea
                   id="professional-description"
                   rows={5}
@@ -171,45 +216,119 @@ export function ProfileForm() {
                 </div>
               </Field>
               <FieldSet>
+                <span className="eyebrow mt-4 text-primary">
+                  02 / SUA TRAJETÓRIA NA PRÁTICA
+                </span>
                 <FieldLegend variant="label">Projetos realizados</FieldLegend>
-                <p className="text-sm text-muted-foreground">Adicione vários projetos. Projetos aceitos em vagas entram automaticamente nesta lista.</p>
+                <p className="text-sm text-muted-foreground">
+                  Mostre o que você construiu e qual foi sua contribuição.
+                  Projetos aceitos também aparecem aqui.
+                </p>
                 <div className="flex flex-col gap-3">
                   {(draft.portfolioProjects ?? []).map((project) => (
-                    <div key={project.id} className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                    <div
+                      key={project.id}
+                      className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3"
+                    >
                       <div className="flex items-start gap-2">
                         <Field className="flex-1">
-                          <FieldLabel htmlFor={`portfolio-title-${project.id}`}>Título</FieldLabel>
-                          <Input id={`portfolio-title-${project.id}`} placeholder="Ex.: Plataforma de pagamentos" value={project.title} onChange={(event) => updatePortfolio(project.id, { title: event.target.value })} readOnly={Boolean(project.sourceProjectId)} />
+                          <FieldLabel htmlFor={`portfolio-title-${project.id}`}>
+                            Título
+                          </FieldLabel>
+                          <Input
+                            id={`portfolio-title-${project.id}`}
+                            placeholder="Ex.: Plataforma de pagamentos"
+                            value={project.title}
+                            onChange={(event) =>
+                              updatePortfolio(project.id, {
+                                title: event.target.value
+                              })
+                            }
+                            readOnly={Boolean(project.sourceProjectId)}
+                          />
                         </Field>
-                        {!project.sourceProjectId && <Button type="button" variant="ghost" size="icon" className="mt-6 text-muted-foreground hover:text-destructive" onClick={() => removePortfolio(project.id)} aria-label="Remover projeto"><Trash2 /></Button>}
+                        {!project.sourceProjectId && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="mt-6 text-muted-foreground hover:text-destructive"
+                            onClick={() => removePortfolio(project.id)}
+                            aria-label="Remover projeto"
+                          >
+                            <Trash2 />
+                          </Button>
+                        )}
                       </div>
-                      {project.sourceProjectId && <p className="text-xs font-medium text-primary">Projeto aceito automaticamente</p>}
+                      {project.sourceProjectId && (
+                        <p className="text-xs font-medium text-primary">
+                          Projeto aceito automaticamente
+                        </p>
+                      )}
                       <Field>
-                        <FieldLabel htmlFor={`portfolio-description-${project.id}`}>Descrição</FieldLabel>
-                        <Textarea id={`portfolio-description-${project.id}`} rows={2} placeholder="Descreva sua atuação" value={project.description} onChange={(event) => updatePortfolio(project.id, { description: event.target.value })} readOnly={Boolean(project.sourceProjectId)} />
+                        <FieldLabel
+                          htmlFor={`portfolio-description-${project.id}`}
+                        >
+                          Descrição
+                        </FieldLabel>
+                        <Textarea
+                          id={`portfolio-description-${project.id}`}
+                          rows={2}
+                          placeholder="Descreva sua atuação"
+                          value={project.description}
+                          onChange={(event) =>
+                            updatePortfolio(project.id, {
+                              description: event.target.value
+                            })
+                          }
+                          readOnly={Boolean(project.sourceProjectId)}
+                        />
                         {!project.sourceProjectId && (
                           <div>
                             <AiDescriptionAssistant
                               contextType="PORTFOLIO"
                               value={project.description}
-                              onApply={(text) => updatePortfolio(project.id, { description: text })}
+                              onApply={(text) =>
+                                updatePortfolio(project.id, {
+                                  description: text
+                                })
+                              }
                             />
                           </div>
                         )}
                       </Field>
                     </div>
                   ))}
-                  {(draft.portfolioProjects ?? []).length === 0 && <p className="text-sm text-muted-foreground">Nenhum projeto adicionado ainda.</p>}
+                  {(draft.portfolioProjects ?? []).length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum projeto adicionado ainda.
+                    </p>
+                  )}
                 </div>
-                <Button type="button" variant="outline" className="w-fit" onClick={addPortfolio}><Plus data-icon="inline-start" />Adicionar projeto</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-fit"
+                  onClick={addPortfolio}
+                >
+                  <Plus data-icon="inline-start" />
+                  Adicionar projeto
+                </Button>
               </FieldSet>
               <Field>
                 <FieldLabel htmlFor="profile-photo">Foto de perfil</FieldLabel>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <ProfileAvatar profile={draft} className="size-16" />
                   <div className="flex flex-1 flex-col gap-1.5">
-                    <Input id="profile-photo" type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePhoto} />
-                    <p className="text-xs text-muted-foreground">PNG, JPG ou WebP, até 512 KB.</p>
+                    <Input
+                      id="profile-photo"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handlePhoto}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      PNG, JPG ou WebP, até 512 KB.
+                    </p>
                   </div>
                 </div>
               </Field>
@@ -217,7 +336,7 @@ export function ProfileForm() {
           </CardContent>
         </Card>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
           <Button type="submit" disabled={saving}>
             <Save data-icon="inline-start" />
             {saving ? "Salvando..." : "Salvar perfil"}
@@ -227,18 +346,64 @@ export function ProfileForm() {
               Perfil salvo com sucesso.
             </span>
           )}
-          {error && <span className="text-sm font-medium text-destructive">{error}</span>}
+          {error && (
+            <span className="text-sm font-medium text-destructive">
+              {error}
+            </span>
+          )}
         </div>
       </div>
 
       <div className="flex flex-col gap-4">
-        <Card className="lg:sticky lg:top-6">
+        <Card className="border-primary/10 bg-secondary/40">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm">
+                Seu perfil, mais completo
+              </CardTitle>
+              <span className="text-sm font-semibold text-primary">
+                {completion}%
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Preenchimento do perfil"
+              aria-valuenow={completion}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="mt-4 h-1.5 overflow-hidden rounded-full bg-primary/10"
+            >
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-500"
+                style={{ width: `${completion}%` }}
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {profileSteps.map((step) => (
+              <div
+                key={step.label}
+                className="flex items-center gap-2 text-xs text-muted-foreground"
+              >
+                <span
+                  className={`flex size-4 items-center justify-center rounded-full ${step.complete ? "bg-primary text-primary-foreground" : "border border-muted-foreground/40"}`}
+                >
+                  {step.complete && <Check size={10} />}
+                </span>
+                {step.label}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card className="lg:sticky lg:top-24">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="size-4 text-primary" />
               Pré-visualização
             </CardTitle>
-            <CardDescription>Como seu perfil aparece para o time.</CardDescription>
+            <CardDescription>
+              Como seu perfil aparece para o time.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex items-center gap-3">
@@ -259,7 +424,8 @@ export function ProfileForm() {
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">Descrição profissional</p>
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {draft.projects || "Adicione uma descrição profissional para melhorar sua apresentação e o matching."}
+                {draft.projects ||
+                  "Adicione uma descrição profissional para melhorar sua apresentação e o matching."}
               </p>
             </div>
           </CardContent>

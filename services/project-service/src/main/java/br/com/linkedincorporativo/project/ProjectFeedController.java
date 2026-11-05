@@ -102,9 +102,7 @@ public class ProjectFeedController {
     }
 
     private static boolean canViewFeed(UserAccount user) {
-        return "CANDIDATE".equalsIgnoreCase(user.getRole())
-            || "RECRUITER".equalsIgnoreCase(user.getRole())
-            || "MANAGER".equalsIgnoreCase(user.getRole());
+        return user != null && !"ADMIN".equalsIgnoreCase(user.getRole());
     }
 
     private static boolean isOwner(Project project, UserAccount user) {

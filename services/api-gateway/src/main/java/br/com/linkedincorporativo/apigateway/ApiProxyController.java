@@ -41,6 +41,9 @@ public class ApiProxyController {
 
     @PostMapping("/auth/register") public ResponseEntity<Object> register(@RequestBody Object body) { return post(projectUrl + "/api/auth/register", body, null); }
     @PostMapping("/auth/login") public ResponseEntity<Object> login(@RequestBody Object body) { return post(projectUrl + "/api/auth/login", body, null); }
+    @PostMapping("/auth/password-reset/request") public ResponseEntity<Object> requestPasswordReset(@RequestBody Object body) { return post(projectUrl + "/api/auth/password-reset/request", body, null); }
+    @PostMapping("/auth/password-reset/confirm") public ResponseEntity<Object> confirmPasswordReset(@RequestBody Object body) { return post(projectUrl + "/api/auth/password-reset/confirm", body, null); }
+    @PostMapping("/auth/change-password") public ResponseEntity<Object> changePassword(@RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/auth/change-password", body, auth); }
     @GetMapping("/auth/me") public ResponseEntity<Object> me(@RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/auth/me", auth); }
     @PatchMapping("/auth/profile") public ResponseEntity<Object> linkProfile(@RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return patch(projectUrl + "/api/auth/profile", body, auth); }
 
@@ -101,10 +104,17 @@ public class ApiProxyController {
     @PutMapping("/chats/{id}/note") public ResponseEntity<Object> saveNote(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return put(projectUrl + "/api/chats/" + id + "/note", body, auth); }
 
     @GetMapping("/matches/projects/{id}")
-    public ResponseEntity<Object> recommendations(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) {
+    public ResponseEntity<Object> recommendations(
+        @PathVariable Long id,
+        @RequestParam(defaultValue = "0") double minScore,
+        @RequestParam(defaultValue = "false") boolean interestedOnly,
+        @RequestParam(defaultValue = "10") int limit,
+        @RequestHeader(value = "Authorization", required = false) String auth
+    ) {
         ResponseEntity<Object> access = get(projectUrl + "/api/projects/" + id, auth);
         if (access.getStatusCode().isError()) return access;
-        return get(matchUrl + "/api/matches/projects/" + id, null);
+        String filters = "?minScore=" + minScore + "&interestedOnly=" + interestedOnly + "&limit=" + limit;
+        return get(matchUrl + "/api/matches/projects/" + id + filters, null);
     }
 
     private ResponseEntity<Object> get(String url, String auth) {

@@ -9,19 +9,35 @@ type Theme = "light" | "dark"
 
 const THEME_STORAGE_KEY = "synapse-theme"
 
+export function applyTheme(theme: Theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark")
+  document.documentElement.style.colorScheme = theme
+  let persisted = true
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+  } catch {
+    persisted = false
+  }
+  window.dispatchEvent(new Event("synapse-theme-change"))
+  return persisted
+}
+
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("light")
 
   useEffect(() => {
-    const currentTheme = document.documentElement.classList.contains("dark") ? "dark" : "light"
-    setTheme(currentTheme)
+    const sync = () =>
+      setTheme(
+        document.documentElement.classList.contains("dark") ? "dark" : "light"
+      )
+    sync()
+    window.addEventListener("synapse-theme-change", sync)
+    return () => window.removeEventListener("synapse-theme-change", sync)
   }, [])
 
   function toggleTheme() {
     const nextTheme: Theme = theme === "dark" ? "light" : "dark"
-    document.documentElement.classList.toggle("dark", nextTheme === "dark")
-    document.documentElement.style.colorScheme = nextTheme
-    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+    applyTheme(nextTheme)
     setTheme(nextTheme)
   }
 

@@ -31,7 +31,5 @@ export interface Project {
 export interface MatchResult {
   profile: Profile
   score: number
-  textScore: number
-  interestBoost: number
   interested: boolean
 }

@@ -21,8 +21,11 @@ diretamente pelo navegador.
 
 | Método | Rota | Uso |
 |---|---|---|
-| `POST` | `/auth/register` | cria conta; recebe `email`, `password`, `displayName` e `role` |
+| `POST` | `/auth/register` | cria uma conta de membro; recebe `email`, `password` e `displayName` |
 | `POST` | `/auth/login` | autentica e retorna token e usuário |
+| `POST` | `/auth/password-reset/request` | inicia a recuperação de senha por e-mail |
+| `POST` | `/auth/password-reset/confirm` | redefine a senha com o token recebido no e-mail |
+| `POST` | `/auth/change-password` | troca a senha da sessão autenticada; requer senha atual |
 | `GET` | `/auth/me` | retorna a sessão do token atual |
 | `PATCH` | `/auth/profile` | atualiza nome e dados básicos do usuário |
 
@@ -30,16 +33,31 @@ A senha deve ter ao menos seis caracteres. Exemplo de cadastro:
 
 ```json
 {
-  "email": "recrutador@empresa.com",
+  "email": "ana@exemplo.com",
   "password": "senha-segura",
-  "displayName": "Ana Recrutadora",
-  "role": "RECRUITER"
+  "displayName": "Ana"
 }
 ```
 
-O papel `ADMIN` não pode ser escolhido no cadastro público. A conta administrativa
-é criada ou atualizada na inicialização com `ADMIN_EMAIL`, `ADMIN_PASSWORD` e
-`ADMIN_DISPLAY_NAME` no ambiente do Project Service.
+Todo cadastro público cria uma conta de membro, que pode tanto manter um perfil
+quanto publicar projetos. O papel `ADMIN` não pode ser escolhido no cadastro
+público; a conta administrativa é criada ou atualizada na inicialização com
+`ADMIN_EMAIL`, `ADMIN_PASSWORD` e `ADMIN_DISPLAY_NAME` no ambiente do Project
+Service.
+
+`POST /auth/password-reset/request` recebe `{ "email": "..." }` e sempre
+responde de forma genérica para não expor se o endereço possui conta. Para uma
+conta existente, envia um link de uso único que expira em 30 minutos por padrão.
+`POST /auth/password-reset/confirm` recebe `token` e `newPassword`; a nova senha
+deve ter pelo menos 8 caracteres e invalida a sessão anterior. A troca autenticada
+recebe `currentPassword` e `newPassword`, rotaciona o token da sessão e devolve o
+usuário atualizado.
+
+O SMTP usa `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`,
+`MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS` e `MAIL_FROM`. O Compose traz Mailpit em
+`http://localhost:8025` como caixa de e-mail de desenvolvimento. Em produção,
+configure essas variáveis com o servidor SMTP e `APP_PUBLIC_URL` com a URL pública
+da aplicação.
 
 ## Métricas administrativas de LLM
 
@@ -112,12 +130,17 @@ salvo e associado.
 ## Matching
 
 ```http
-GET /matches/projects/{projectId}
+GET /matches/projects/{projectId}?minScore=50&interestedOnly=true&limit=10
 ```
 
-Retorna a lista ordenada de recomendações, com dados resumidos do profissional,
-`matchScore`/porcentagem de correspondência e estado da decisão. O modelo v2
-recebe somente a descrição da vaga e, para cada candidato, a bio concatenada
+Retorna a lista ordenada de recomendações. Os parâmetros opcionais permitem
+definir a compatibilidade mínima de `0` a `100`, restringir o resultado a quem
+demonstrou interesse e limitar a quantidade retornada. O limite padrão é `10`,
+aceita valores entre `1` e `50` e é aplicado depois da ordenação. A resposta
+inclui `totalResults`, `filteredTotal`, `limit` e `results` para diferenciar o
+total avaliado, o total que atende aos filtros e a parcela efetivamente retornada.
+
+O modelo v2 recebe somente a descrição da vaga e, para cada candidato, a bio concatenada
 às descrições dos projetos do portfólio. Skills, profissão, escolaridade e
 tempo de experiência não são features independentes. Rejeitados não
 aparecem na lista ativa; o histórico continua disponível pela API de decisões.
@@ -125,12 +148,10 @@ aparecem na lista ativa; o histórico continua disponível pela API de decisões
 O Match Orchestrator consulta os serviços de projeto e perfil e chama o ML
 Engine pela rede interna. A rota de inferência do ML Engine é definida em
 [`../contracts/openapi/ml-engine.yaml`](../contracts/openapi/ml-engine.yaml).
-Após receber a compatibilidade textual, o orquestrador acrescenta o bônus
-configurado por `MATCH_INTEREST_BOOST_POINTS` aos profissionais que demonstraram
-interesse, limita o score final a 100 e reordena o resultado. A resposta expõe
-`text_score`, `interest_boost`, `interested` e o `score` final para tornar o
-critério auditável. O valor padrão é 10 pontos e não altera as features do
-modelo enquanto o novo treinamento não é realizado.
+Após receber a compatibilidade textual, o orquestrador preserva o score e a
+ordenação produzidos pelo ML Engine e então aplica os filtros e o limite. Cada
+item da resposta expõe `score` e `interested`;
+o segundo campo é apenas informativo e não participa do cálculo.
 
 ## Assistente de descrições com LLM
 

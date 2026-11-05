@@ -17,6 +17,17 @@ spring:
     multipart:
       max-file-size: 5MB
       max-request-size: 6MB
+  mail:
+    host: ${MAIL_HOST:mailpit}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
 
 server:
   port: ${SERVER_PORT:8082}
@@ -43,6 +54,12 @@ admin:
   password: ${ADMIN_PASSWORD:}
   display-name: ${ADMIN_DISPLAY_NAME:Administrador}
   metrics-zone: ${ADMIN_METRICS_TIMEZONE:America/Sao_Paulo}
+
+security:
+  password-reset:
+    public-url: ${APP_PUBLIC_URL:http://localhost:3000}
+    from: ${MAIL_FROM:no-reply@synapse.local}
+    expiration-minutes: ${PASSWORD_RESET_EXPIRATION_MINUTES:30}
 
 management:
   endpoints:

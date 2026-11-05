@@ -87,9 +87,8 @@ e `LLM_OUTPUT_COST_PER_MILLION` alimentam as estimativas em USD e podem
 permanecer em zero enquanto o uso estiver na cota gratuita. A conta `ADMIN` é provisionada
 na inicialização e não aparece como opção no cadastro público.
 
-`MATCH_INTEREST_BOOST_POINTS` define quantos pontos o interesse declarado
-acrescenta ao score textual no Match Orchestrator. O padrão local é 10 e o
-score final permanece limitado a 100.
+O interesse declarado é exibido como informação complementar e não altera a
+pontuação de compatibilidade nem a ordenação dos profissionais.
 
 Após a subida do ambiente, acesse a aplicação em `http://localhost:3000`. O
 frontend usa o API Gateway em `http://localhost:8080`; os serviços internos e

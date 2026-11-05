@@ -1,22 +1,26 @@
 # Funcionalidades do MVP
 
-Este documento descreve o comportamento disponível para recrutadores e
-profissionais na versão atual do sistema.
+Este documento descreve o comportamento disponível para os membros da
+plataforma na versão atual do sistema.
 
 ## Acesso e permissões
 
-- O usuário cria uma conta com e-mail, nome, senha e perfil (`RECRUITER` ou
-  `CANDIDATE`).
+- O usuário cria uma conta única com e-mail, nome e senha. Não há escolha de
+  tipo de conta: a mesma pessoa pode manter o próprio perfil, publicar projetos
+  e demonstrar interesse em oportunidades.
 - O login retorna um token Bearer usado pelo frontend nas chamadas ao Gateway.
 - A senha precisa ter pelo menos seis caracteres.
-- Cada recrutador pode criar, editar, consultar e excluir somente os próprios
+- A conta autenticada pode trocar a senha nas configurações ao confirmar a senha
+  atual. A sessão é rotacionada depois da troca.
+- A tela de login permite solicitar recuperação por e-mail. O link é de uso único,
+  expira em 30 minutos por padrão e, após redefinir a senha, encerra a sessão anterior.
+- Cada membro pode criar, editar, consultar e excluir somente os próprios
   projetos. Projetos legados sem proprietário são associados ao proprietário
   correspondente pelo e-mail da sessão quando isso é possível.
 - A sessão atual é recuperada pela API de autenticação e o frontend redireciona
   usuários não autenticados para o login.
 - A conta `ADMIN` é provisionada somente por variáveis de ambiente e acessa um
-  dashboard próprio; o cadastro público continua limitado a profissional e
-  recrutador.
+  dashboard próprio; o cadastro público cria contas de membro.
 
 ## Dashboard administrativo
 
@@ -71,9 +75,8 @@ pessoas interessadas. O profissional pode demonstrar ou retirar o próprio
 interesse depois de salvar o perfil; o feed nunca revela quem são os demais.
 
 Na área do recrutador, a lista e o detalhe do projeto mostram a mesma contagem.
-Nas recomendações, candidatos interessados recebem um selo e um bônus
-configurável sobre o score textual. O score textual e o bônus aparecem
-separados para que o motivo da ordenação permaneça transparente.
+Nas recomendações, candidatos interessados recebem um selo informativo. O
+interesse não altera o score textual nem a posição no ranking.
 
 ## Escrita assistida por LLM
 
@@ -101,6 +104,10 @@ Cada recomendação mostra uma porcentagem de correspondência de 0 a 100. Essa
 porcentagem representa compatibilidade textual no modelo publicado, não uma
 garantia de contratação. O cartão do profissional permite abrir o
 perfil, iniciar um chat, aceitar ou rejeitar.
+
+A lista pode ser filtrada por compatibilidade mínima e por manifestação de
+interesse. O responsável também escolhe exibir até 5, 10, 20 ou 50 profissionais;
+o padrão é 10, sempre preservando a ordem de maior compatibilidade.
 
 Ao rejeitar, o profissional deixa de aparecer na lista ativa daquele projeto,
 mas a decisão fica salva no histórico. É possível consultar o histórico e

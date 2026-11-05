@@ -7,6 +7,15 @@ export function unlockNotificationSound() {
 }
 
 export function playNotificationSound() {
+  try {
+    if (
+      typeof window !== "undefined" &&
+      window.localStorage.getItem("synapse-notification-sound") === "off"
+    )
+      return
+  } catch {
+    /* Use the default when storage is unavailable. */
+  }
   if (!audioContext || audioContext.state === "suspended") return
 
   const oscillator = audioContext.createOscillator()

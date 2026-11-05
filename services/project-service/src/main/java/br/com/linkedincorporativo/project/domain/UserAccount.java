@@ -15,7 +15,7 @@ public class UserAccount {
     private String email;
     private String passwordHash;
     private String displayName;
-    private String role = "RECRUITER";
+    private String role = "MEMBER";
     private Long profileId;
     private String sessionToken;
 

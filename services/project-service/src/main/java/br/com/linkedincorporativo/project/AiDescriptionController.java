@@ -154,12 +154,9 @@ public class AiDescriptionController {
     }
 
     private static void authorizeContext(String contextType, UserAccount user) {
-        String role = user.getRole() == null ? "" : user.getRole().toUpperCase();
-        boolean recruiterContext = "VACANCY".equals(contextType);
-        boolean allowed = !recruiterContext || Set.of("RECRUITER", "MANAGER").contains(role);
-        if (!allowed) {
+        if (user == null || "ADMIN".equalsIgnoreCase(user.getRole())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "Somente recrutadores podem usar a IA de vagas.");
+                "Sua conta não pode usar este assistente de descrição.");
         }
     }
 

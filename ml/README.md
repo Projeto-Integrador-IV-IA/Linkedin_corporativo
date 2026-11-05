@@ -32,7 +32,7 @@ Os requisitos das issues 14, 15 e 16 devem ser entregues nesta separação: data
 
 ## Anotações
 
-## Ranker textual v2
+## Ranker textual v3
 
 O contrato atual usa exclusivamente `project_description` e
 `profile_description`. O segundo campo concatena a bio e as descrições dos
@@ -51,10 +51,21 @@ python training/train_description_ranker.py \
   --output models/job_ranker.joblib
 ```
 
-O artefato recebe a versão `description-ranker-v2`. O ML Engine ignora
-artefatos do contrato anterior e usa similaridade TF-IDF como fallback até que
-um modelo v2 seja publicado. A seleção final do dataset, licença, idioma,
-avaliação de vieses e métricas NDCG@10 estão acompanhadas na Task 27.
+O artefato recebe a versão `description-ranker-v3`. A representação textual usa
+`HashingVectorizer` com n-gramas de caracteres, sem vocabulário fixo, para não
+descartar textos em português quando o conjunto de treino contém inglês. A
+regressão usa regularização `C=0.1`, sem balanceamento artificial das classes.
+O treinamento registra ROC-AUC, Average Precision, Brier loss, log loss,
+NDCG@10, MRR, percentis dos scores e taxa de saturação. Por padrão, o artefato
+não é publicado se mais de 1% da validação alcançar score igual ou superior a
+99,5%, ou se não atingir os gates mínimos de ROC-AUC 0,60, Average Precision
+0,35, NDCG@10 0,55 e MRR 0,65.
+
+O índice representa afinidade com candidaturas históricas dentro do conjunto
+negativo amostrado; não é probabilidade de contratação. Para uma implantação
+organizacional, o próximo passo recomendado é validar um modelo de embeddings
+multilíngues e recalibrá-lo com decisões reais, consentidas e auditadas em
+português, mantendo separação de projetos entre treino e validação.
 
 ## Ranker legado v1
 
