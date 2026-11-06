@@ -3,6 +3,7 @@ package br.com.linkedincorporativo.project;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -39,6 +40,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, String>> handleLargeUpload(MaxUploadSizeExceededException exception) {
         return response(HttpStatus.PAYLOAD_TOO_LARGE, "O arquivo enviado é maior que o limite permitido.");
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleConflict(DataIntegrityViolationException exception) {
+        return response(HttpStatus.CONFLICT, "Não foi possível salvar porque estes dados já estão em uso.");
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

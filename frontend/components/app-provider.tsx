@@ -109,11 +109,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [authUser])
 
   useEffect(() => {
-    const unlock = () => unlockNotificationSound()
-    window.addEventListener("pointerdown", unlock)
+    let active = true
+    const unlock = (event: Event) => {
+      if (!event.isTrusted) return
+      void unlockNotificationSound().then((unlocked) => {
+        if (!active || !unlocked) return
+        window.removeEventListener("pointerup", unlock)
+        window.removeEventListener("keydown", unlock)
+      })
+    }
+    window.addEventListener("pointerup", unlock)
     window.addEventListener("keydown", unlock)
     return () => {
-      window.removeEventListener("pointerdown", unlock)
+      active = false
+      window.removeEventListener("pointerup", unlock)
       window.removeEventListener("keydown", unlock)
     }
   }, [])

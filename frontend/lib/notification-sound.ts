@@ -1,9 +1,17 @@
 let audioContext: AudioContext | null = null
+let audioUnlocked = false
 
-export function unlockNotificationSound() {
-  if (typeof window === "undefined" || !window.AudioContext) return
-  audioContext ??= new window.AudioContext()
-  if (audioContext.state === "suspended") void audioContext.resume()
+export async function unlockNotificationSound() {
+  if (typeof window === "undefined" || !window.AudioContext) return false
+  try {
+    audioContext ??= new window.AudioContext()
+    if (audioContext.state === "suspended") await audioContext.resume()
+    audioUnlocked = audioContext.state === "running"
+    return audioUnlocked
+  } catch {
+    audioUnlocked = false
+    return false
+  }
 }
 
 export function playNotificationSound() {
@@ -16,7 +24,7 @@ export function playNotificationSound() {
   } catch {
     /* Use the default when storage is unavailable. */
   }
-  if (!audioContext || audioContext.state === "suspended") return
+  if (!audioUnlocked || !audioContext || audioContext.state !== "running") return
 
   const oscillator = audioContext.createOscillator()
   const gain = audioContext.createGain()

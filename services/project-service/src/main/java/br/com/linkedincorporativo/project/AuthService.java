@@ -63,7 +63,7 @@ public class AuthService {
     public UserAccount login(String email, String password) {
         UserAccount user = users.findByEmailIgnoreCase(email == null ? "" : email.trim())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos."));
-        if (!encoder.matches(password == null ? "" : password, user.getPasswordHash())) {
+        if (!passwordMatches(password, user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos.");
         }
         return issueToken(user);
@@ -76,11 +76,11 @@ public class AuthService {
 
     @Transactional
     public UserAccount changePassword(UserAccount user, String currentPassword, String newPassword) {
-        if (!encoder.matches(currentPassword == null ? "" : currentPassword, user.getPasswordHash())) {
+        if (!passwordMatches(currentPassword, user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "A senha atual informada está incorreta.");
         }
         validatePassword(newPassword);
-        if (encoder.matches(newPassword, user.getPasswordHash())) {
+        if (passwordMatches(newPassword, user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escolha uma senha diferente da atual.");
         }
         user.setPasswordHash(encoder.encode(newPassword));
@@ -142,5 +142,14 @@ public class AuthService {
     private UserAccount issueToken(UserAccount user) {
         user.setSessionToken(UUID.randomUUID().toString() + UUID.randomUUID());
         return users.save(user);
+    }
+
+    private boolean passwordMatches(String rawPassword, String passwordHash) {
+        if (passwordHash == null || passwordHash.isBlank()) return false;
+        try {
+            return encoder.matches(rawPassword == null ? "" : rawPassword, passwordHash);
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 }
