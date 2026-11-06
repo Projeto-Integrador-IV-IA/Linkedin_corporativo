@@ -116,11 +116,11 @@ public class ApiProxyController {
     }
 
     private ResponseEntity<Object> get(String url, String auth) {
-        try { return client.get().uri(url).headers(headers -> addAuth(headers, auth)).retrieve().toEntity(Object.class); }
+        try { return relay(client.get().uri(url).headers(headers -> addAuth(headers, auth)).retrieve().toEntity(Object.class)); }
         catch (RestClientResponseException exception) { return error(exception); }
     }
     private ResponseEntity<Object> post(String url, Object body, String auth) {
-        try { return client.post().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class); }
+        try { return relay(client.post().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class)); }
         catch (RestClientResponseException exception) { return error(exception); }
     }
     private ResponseEntity<Object> postMultipart(String url, String content, MultipartFile file, String auth) {
@@ -130,20 +130,23 @@ public class ApiProxyController {
             var part = form.part("file", file.getResource()).filename(file.getOriginalFilename());
             if (file.getContentType() != null) part.contentType(MediaType.parseMediaType(file.getContentType()));
         }
-        try { return client.post().uri(url).headers(headers -> addAuth(headers, auth)).contentType(MediaType.MULTIPART_FORM_DATA).body(form.build()).retrieve().toEntity(Object.class); }
+        try { return relay(client.post().uri(url).headers(headers -> addAuth(headers, auth)).contentType(MediaType.MULTIPART_FORM_DATA).body(form.build()).retrieve().toEntity(Object.class)); }
         catch (RestClientResponseException exception) { return error(exception); }
     }
     private ResponseEntity<Object> put(String url, Object body, String auth) {
-        try { return client.put().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class); }
+        try { return relay(client.put().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class)); }
         catch (RestClientResponseException exception) { return error(exception); }
     }
     private ResponseEntity<Object> patch(String url, Object body, String auth) {
-        try { return client.patch().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class); }
+        try { return relay(client.patch().uri(url).headers(headers -> addAuth(headers, auth)).body(body).retrieve().toEntity(Object.class)); }
         catch (RestClientResponseException exception) { return error(exception); }
     }
     private ResponseEntity<Object> delete(String url, String auth) {
-        try { return client.delete().uri(url).headers(headers -> addAuth(headers, auth)).retrieve().toEntity(Object.class); }
+        try { return relay(client.delete().uri(url).headers(headers -> addAuth(headers, auth)).retrieve().toEntity(Object.class)); }
         catch (RestClientResponseException exception) { return error(exception); }
+    }
+    private static ResponseEntity<Object> relay(ResponseEntity<Object> upstream) {
+        return ResponseEntity.status(upstream.getStatusCode()).body(upstream.getBody());
     }
     private static void addAuth(HttpHeaders headers, String auth) { if (auth != null && !auth.isBlank()) headers.set("Authorization", auth); }
     private ResponseEntity<Object> error(RestClientResponseException exception) {
