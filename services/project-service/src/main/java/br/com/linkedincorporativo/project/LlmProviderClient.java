@@ -53,6 +53,10 @@ public class LlmProviderClient {
         this.nvidiaBaseUrl = stripTrailingSlash(nvidiaBaseUrl);
     }
 
+    public boolean isMock() {
+        return "mock".equals(provider);
+    }
+
     public List<String> questions(Long userId, String contextType, String description, int versionCount, int maximum) {
         String prompt = """
             Você é um assistente de redação profissional em português do Brasil.

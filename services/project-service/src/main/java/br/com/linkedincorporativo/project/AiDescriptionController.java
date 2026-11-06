@@ -35,7 +35,7 @@ public class AiDescriptionController {
                                    @Value("${llm.cooldown-hours:24}") long cooldownHours) {
         this.sessions = sessions;
         this.llm = llm;
-        this.cooldown = Duration.ofHours(Math.max(1, cooldownHours));
+        this.cooldown = Duration.ofHours(Math.max(0, cooldownHours));
     }
 
     @PostMapping
@@ -48,12 +48,14 @@ public class AiDescriptionController {
         List<String> cooldownContexts = "VACANCY".equals(contextType)
             ? List.of("VACANCY")
             : List.of("PROFILE", "PORTFOLIO");
-        var blocked = sessions.findFirstByUserIdAndContextTypeInAndCooldownUntilAfterOrderByCreatedAtDesc(
-            currentUser.getId(), cooldownContexts, now
-        );
+        var blocked = llm.isMock() || cooldown.isZero()
+            ? java.util.Optional.<AiDescriptionSession>empty()
+            : sessions.findFirstByUserIdAndContextTypeInAndCooldownUntilAfterOrderByCreatedAtDesc(
+                currentUser.getId(), cooldownContexts, now
+            );
         if (blocked.isPresent()) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of(
-                "message", "Você já iniciou uma assistência de IA nesta janela de 24 horas.",
+                "message", "Você já utilizou a assistência de IA recentemente. Tente novamente após o horário indicado.",
                 "availableAt", blocked.get().getCooldownUntil().toString()
             ));
         }
@@ -67,7 +69,7 @@ public class AiDescriptionController {
         session.setQuestionsJson(mapper.writeValueAsString(questions));
         session.setCreatedAt(now);
         session.setUpdatedAt(now);
-        session.setCooldownUntil(now.plus(cooldown));
+        session.setCooldownUntil(llm.isMock() || cooldown.isZero() ? now : now.plus(cooldown));
         return ResponseEntity.status(HttpStatus.CREATED).body(view(sessions.save(session), questions));
     }
 
