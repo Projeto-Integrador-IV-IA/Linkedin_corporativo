@@ -37,7 +37,8 @@ consultas do Profile Service, mas não é fonte de verdade.
   telemetria de tokens para administradores.
 - **Match Orchestrator**: integra dados de perfil e projeto e solicita scores
   ao ML Engine.
-- **ML Engine**: carrega o ranker textual v2 e responde à inferência.
+- **ML Engine**: carrega o ranker híbrido v4 (lexical v3 + E5 multilíngue em
+  ONNX), calcula o índice de aderência e responde à inferência.
 - **Redis**: cache de perfis com TTL de 60 segundos e fallback para
   PostgreSQL.
 

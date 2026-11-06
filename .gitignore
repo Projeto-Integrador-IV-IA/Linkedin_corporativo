@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.dokploy.example
 
 # Java/Maven/Gradle
 **/target/
@@ -21,6 +22,10 @@
 **/node_modules/
 **/dist/
 **/.vite/
+**/.next/
+**/out/
+**/coverage/
+**/*.log
 **/*.tsbuildinfo
 
 # IDE e sistema operacional
@@ -41,8 +46,6 @@ ml/models/*
 !ml/models/.gitkeep
 !ml/models/job_ranker.joblib
 frontend/Grupo2.zip
-ml/data/job-recommendation/
 
 # Overrides locais do Compose
 docker-compose.override.yml
-ml/data/job-recommendation/

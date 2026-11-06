@@ -134,15 +134,18 @@ GET /matches/projects/{projectId}?minScore=50&interestedOnly=true&limit=10
 ```
 
 Retorna a lista ordenada de recomendações. Os parâmetros opcionais permitem
-definir a compatibilidade mínima de `0` a `100`, restringir o resultado a quem
+definir a aderência mínima de `0` a `100`, restringir o resultado a quem
 demonstrou interesse e limitar a quantidade retornada. O limite padrão é `10`,
 aceita valores entre `1` e `50` e é aplicado depois da ordenação. A resposta
 inclui `totalResults`, `filteredTotal`, `limit` e `results` para diferenciar o
 total avaliado, o total que atende aos filtros e a parcela efetivamente retornada.
 
-O modelo v2 recebe somente a descrição da vaga e, para cada candidato, a bio concatenada
+O ranker híbrido v4 recebe somente a descrição da vaga e, para cada candidato, a bio concatenada
 às descrições dos projetos do portfólio. Skills, profissão, escolaridade e
-tempo de experiência não são features independentes. Rejeitados não
+tempo de experiência não são features independentes. Ele combina o ranker
+lexical v3 com similaridade semântica multilíngue E5. O valor de `score` é um
+índice em pontos de `0` a `100`, não uma probabilidade de contratação.
+Rejeitados não
 aparecem na lista ativa; o histórico continua disponível pela API de decisões.
 
 O Match Orchestrator consulta os serviços de projeto e perfil e chama o ML

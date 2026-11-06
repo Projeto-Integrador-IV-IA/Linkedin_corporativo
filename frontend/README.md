@@ -13,8 +13,8 @@ dashboard administrativo de uso das LLMs.
 - **Projetos**: lista dos projetos do recrutador, criação, edição e acesso aos
   detalhes.
 - **Detalhes do projeto**: recomendações ordenadas pelo score, filtros por
-  compatibilidade e interesse, limite de profissionais exibidos, porcentagem de
-  correspondência, foto do profissional e ações de aceitar, rejeitar e chat.
+  aderência e interesse, limite de profissionais exibidos, índice de aderência
+  em pontos, foto do profissional e ações de aceitar, rejeitar e chat.
 - **Chats**: conversas em layout responsivo, lista lateral, mensagens,
   perfil do profissional e notas particulares do recrutador.
 - **Dashboard administrativo**: tokens de entrada/saída/cache/raciocínio,

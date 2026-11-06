@@ -23,3 +23,7 @@ services:
   profile-url: ${PROFILE_SERVICE_URL:http://profile-service:8081}
   project-url: ${PROJECT_SERVICE_URL:http://project-service:8082}
   match-url: ${MATCH_ORCHESTRATOR_URL:http://match-orchestrator:8083}
+
+app:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*}

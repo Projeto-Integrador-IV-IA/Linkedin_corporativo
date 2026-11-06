@@ -12,8 +12,9 @@ services:
       PROFILE_SERVICE_URL: http://profile-service:${PROFILE_SERVICE_PORT}
       PROJECT_SERVICE_URL: http://project-service:${PROJECT_SERVICE_PORT}
       MATCH_ORCHESTRATOR_URL: http://match-orchestrator:${MATCH_ORCHESTRATOR_PORT}
-    ports:
-      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-https://rafixx.com,https://www.rafixx.com}
+    expose:
+      - "${API_GATEWAY_PORT}"
     depends_on:
       profile-service:
         condition: service_healthy
@@ -29,6 +30,7 @@ services:
       start_period: 30s
     networks:
       - linkedin-internal
+      - servidor_net
 
   frontend:
     build:
@@ -36,13 +38,14 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     depends_on:
       api-gateway:
         condition: service_healthy
     networks:
       - linkedin-internal
+      - servidor_net
 
   profile-service:
     build:
@@ -179,6 +182,9 @@ services:
     environment:
       PORT: ${ML_ENGINE_PORT}
       MODEL_PATH: /app/models/job_ranker.joblib
+      SEMANTIC_MODEL_PATH: /app/models/semantic-e5/model.onnx
+      SEMANTIC_TOKENIZER_PATH: /app/models/semantic-e5/tokenizer.json
+      REQUIRE_SEMANTIC_MODEL: "true"
     expose:
       - "${ML_ENGINE_PORT}"
     healthcheck:
@@ -207,8 +213,8 @@ services:
     image: axllent/mailpit:v1.27
     environment:
       MP_MAX_MESSAGES: 200
-    ports:
-      - "8025:8025"
+    expose:
+      - "8025"
     networks:
       - linkedin-internal
 
@@ -266,6 +272,8 @@ services:
 networks:
   linkedin-internal:
     driver: bridge
+  servidor_net:
+    external: true
 
 volumes:
   profile-db-data:

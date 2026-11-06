@@ -1,6 +1,6 @@
 # Deploy no Dokploy
 
-Este procedimento publica o sistema em `https://synapse.rafixx.com` usando o
+Este procedimento publica o sistema em `https://rafixx.com` usando o
 Docker Compose deste repositório.
 
 ## 1. Preparar o DNS
@@ -9,9 +9,13 @@ No provedor do domínio, crie um registro:
 
 ```text
 Tipo: A
-Nome: synapse
+Nome: @
 Valor: IP_PUBLICO_DO_SERVIDOR
 ```
+
+Se quiser aceitar também `www.rafixx.com`, crie um `CNAME` de `www` para
+`rafixx.com`. O exemplo de CORS já permite as duas origens; no Dokploy, a forma
+mais simples é cadastrar `www.rafixx.com` e redirecioná-lo para o domínio raiz.
 
 Libere as portas TCP `80` e `443` no firewall do servidor. O certificado HTTPS
 do Let's Encrypt só poderá ser emitido depois que o domínio apontar para o
@@ -29,12 +33,27 @@ No Dokploy:
 5. Mantenha o build habilitado, pois o Compose compila o frontend, os serviços
    Java e o ML Engine.
 
+Antes do primeiro deploy, confirme no servidor que a rede externa usada pelas
+aplicações existe:
+
+```bash
+docker network inspect servidor_net
+```
+
+Se ela ainda não existir, crie-a uma única vez com
+`docker network create servidor_net`. O Compose não tenta criar essa rede,
+pois ela é compartilhada com o proxy e com outras aplicações do servidor.
+Somente `frontend` e `api-gateway` entram nela; bancos, Redis, Mailpit e os
+microsserviços permanecem isolados na rede interna do projeto.
+
 O arquivo atual usa `build`, portanto o modo Docker Compose é o adequado. O
 modo Stack exige imagens previamente publicadas em um registry.
 
 ## 3. Variáveis do ambiente
 
-Na aba **Environment** do Dokploy, configure ao menos:
+Na aba **Environment** do Dokploy, copie o conteúdo de
+`.env.dokploy.example`, troque todas as senhas e preencha as chaves necessárias.
+As variáveis essenciais para o domínio são:
 
 ```dotenv
 COMPOSE_PROJECT_NAME=synapse
@@ -45,6 +64,8 @@ PROJECT_SERVICE_PORT=8082
 MATCH_ORCHESTRATOR_PORT=8083
 ML_ENGINE_PORT=8000
 NEXT_PUBLIC_API_BASE_URL=/api
+APP_PUBLIC_URL=https://rafixx.com
+CORS_ALLOWED_ORIGIN_PATTERNS=https://rafixx.com,https://www.rafixx.com
 
 POSTGRES_VERSION=16-alpine
 POSTGRES_PROFILE_DB=profile_service
@@ -70,14 +91,19 @@ repositório, os serviços que precisam de todas as variáveis usam `env_file`, 
 o frontend recebe a URL pública durante o build pelo argumento
 `NEXT_PUBLIC_API_BASE_URL`.
 
+`APP_PUBLIC_URL` garante que os links de recuperação de senha usem HTTPS e o
+domínio público. `CORS_ALLOWED_ORIGIN_PATTERNS` limita chamadas feitas por
+outros sites ao domínio configurado, sem deixar o Gateway aberto para qualquer
+origem. As chamadas normais do frontend usam `/api` no mesmo domínio.
+
 ## 4. Configurar os domínios
 
 Na aba **Domains** da aplicação Compose, crie duas regras HTTPS:
 
 | Serviço | Host | Path | Porta do container | HTTPS |
 |---|---|---|---:|---|
-| `frontend` | `synapse.rafixx.com` | `/` | `3000` | Let's Encrypt |
-| `api-gateway` | `synapse.rafixx.com` | `/api` | `8080` | Let's Encrypt |
+| `frontend` | `rafixx.com` | `/` | `3000` | Let's Encrypt |
+| `api-gateway` | `rafixx.com` | `/api` | `8080` | Let's Encrypt |
 
 Na regra do Gateway, mantenha o caminho `/api` chegando ao serviço, sem
 remover o prefixo (`Strip Path` desativado). O Gateway já possui rotas como
@@ -93,8 +119,8 @@ Clique em **Deploy** e acompanhe os logs dos serviços. Após a conclusão,
 verifique:
 
 ```bash
-curl -I https://synapse.rafixx.com
-curl -i https://synapse.rafixx.com/api/auth/me
+curl -I https://rafixx.com
+curl -i https://rafixx.com/api/auth/me
 ```
 
 O segundo comando deve chegar ao Gateway e responder `401`/`403` sem token;

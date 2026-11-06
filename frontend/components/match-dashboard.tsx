@@ -37,7 +37,7 @@ import { createChat, decideCandidate, listCandidateDecisions, listRecommendation
 import type { MatchResult, Profile } from "@/lib/types"
 
 function scoreTone(score: number) {
-  if (score >= 80)
+  if (score >= 70)
     return {
       text: "text-chart-3",
       bar: "[&_[data-slot=progress-indicator]]:bg-chart-3",
@@ -126,7 +126,7 @@ function CandidateCard({ result, decision, onChat, onDecision }: { result: Match
               Índice de aderência textual
             </span>
             <span className={`text-2xl font-bold tabular-nums ${tone.text}`}>
-              {score}%
+              {score}<span className="ml-0.5 text-sm font-medium">/100</span>
             </span>
           </div>
           <Progress
@@ -342,7 +342,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="minimum-score-filter" className="text-sm font-medium">
-                Compatibilidade mínima
+                Aderência mínima
               </label>
               <Select value={minScore} onValueChange={(value) => setMinScore(value ?? "0")}>
                 <SelectTrigger id="minimum-score-filter" className="w-full">
@@ -350,9 +350,11 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="0">Qualquer compatibilidade</SelectItem>
-                    <SelectItem value="50">50% ou mais</SelectItem>
-                    <SelectItem value="80">80% ou mais</SelectItem>
+                    <SelectItem value="0">Qualquer pontuação</SelectItem>
+                    <SelectItem value="50">50 pontos ou mais</SelectItem>
+                    <SelectItem value="60">60 pontos ou mais</SelectItem>
+                    <SelectItem value="70">70 pontos ou mais</SelectItem>
+                    <SelectItem value="80">80 pontos ou mais</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -413,8 +415,8 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
             <div className="flex items-center gap-2">
               <BadgeCheck className="size-4 text-chart-3" />
               <span className="text-sm text-muted-foreground">
-                Melhor match:{" "}
-                <strong className="text-foreground">{topScore}%</strong>
+                Maior aderência:{" "}
+                <strong className="text-foreground">{topScore}/100</strong>
               </span>
             </div>
           </div>
@@ -450,7 +452,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
                 <div>
                   <p className="font-medium">{profile.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {profile.profession}{score !== undefined ? ` · ${score}% de compatibilidade` : ""}
+                    {profile.profession}{score !== undefined ? ` · ${score}/100 de aderência` : ""}
                   </p>
                 </div>
                 <div className="flex gap-2">

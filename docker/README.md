@@ -10,6 +10,7 @@ Para publicar no servidor com domínio e HTTPS, consulte o guia
 
 ```bash
 cp .env.example .env
+docker network create servidor_net # execute apenas uma vez
 docker compose up --build
 ```
 

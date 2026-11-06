@@ -1,8 +1,18 @@
 # Copie este arquivo para docker-compose.override.yml apenas quando precisar
-# depurar um serviço diretamente pelo host. O arquivo real é ignorado pelo Git.
-# O uso normal deve continuar passando pelo API Gateway.
+# executar ou depurar os serviços diretamente pelo host. O arquivo real é
+# ignorado pelo Git. O uso normal deve continuar passando pelo API Gateway.
+# Crie também a rede usada em produção uma única vez com:
+# docker network create servidor_net
 
 services:
+  api-gateway:
+    ports:
+      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+
+  frontend:
+    ports:
+      - "3000:3000"
+
   profile-service:
     ports:
       - "${PROFILE_SERVICE_PORT}:${PROFILE_SERVICE_PORT}"
@@ -18,3 +28,7 @@ services:
   ml-engine:
     ports:
       - "${ML_ENGINE_PORT}:${ML_ENGINE_PORT}"
+
+  mailpit:
+    ports:
+      - "8025:8025"

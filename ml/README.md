@@ -32,12 +32,47 @@ Os requisitos das issues 14, 15 e 16 devem ser entregues nesta separação: data
 
 ## Anotações
 
-## Ranker textual v3
+## Ranker híbrido v4 em produção
 
 O contrato atual usa exclusivamente `project_description` e
 `profile_description`. O segundo campo concatena a bio e as descrições dos
 projetos do portfólio; skills, profissão, escolaridade e experiência não entram
 como features separadas.
+
+O runtime `hybrid-semantic-ranker-v4` combina dois sinais:
+
+- 30% do ranker lexical `description-ranker-v3`;
+- 70% de similaridade semântica do `intfloat/multilingual-e5-small`, fixado na
+  revisão e nos hashes registrados em
+  `../services/ml-engine/semantic-model.json`.
+
+O modelo semântico é baixado e verificado durante o build da imagem. Em
+produção, o serviço só fica pronto quando os componentes lexical e semântico
+estão carregados. A inferência é local por ONNX Runtime, usa cache limitado de
+embeddings e aplica uma penalidade conservadora quando o perfil nega uma
+competência relevante para a vaga.
+
+O `score` retornado é um índice de aderência em pontos de 0 a 100. Ele serve
+para ordenar e filtrar recomendações; não é probabilidade de contratação nem
+uma decisão automática sobre pessoas.
+
+### Gate de qualidade reproduzível
+
+Com o ML Engine em execução:
+
+```bash
+python ml/evaluation/validate_ranker_quality.py \
+  --predict-url http://localhost:8000/predict
+```
+
+O comando testa cenários controlados e um holdout independente e falha com
+código diferente de zero se os limites mínimos de ranking, separação entre
+relevantes e irrelevantes, paráfrases e negações não forem atingidos. A
+avaliação completa pelo Gateway é executada por
+`evaluation/evaluate_live_recommendations.py`. O relatório de referência do v4
+está em `../docs/relatorios/avaliacao-modelo-v4-2026-11-05.md`.
+
+## Componente lexical v3
 
 O script [`training/train_description_ranker.py`](training/train_description_ranker.py)
 recebe um CSV de pares textuais com `label` 0/1 e, preferencialmente,
@@ -61,11 +96,17 @@ não é publicado se mais de 1% da validação alcançar score igual ou superior
 99,5%, ou se não atingir os gates mínimos de ROC-AUC 0,60, Average Precision
 0,35, NDCG@10 0,55 e MRR 0,65.
 
-O índice representa afinidade com candidaturas históricas dentro do conjunto
-negativo amostrado; não é probabilidade de contratação. Para uma implantação
-organizacional, o próximo passo recomendado é validar um modelo de embeddings
-multilíngues e recalibrá-lo com decisões reais, consentidas e auditadas em
-português, mantendo separação de projetos entre treino e validação.
+Esse artefato é preservado como um dos sinais do ranker híbrido v4. Isoladamente,
+o índice representa afinidade com candidaturas históricas dentro do conjunto
+negativo amostrado e não deve ser apresentado como probabilidade de contratação.
+
+## Avaliação E2E reproduzível
+
+O script `evaluation/evaluate_live_recommendations.py` cria cenários temporários
+em português pelo Gateway autenticado, repete a inferência, calcula métricas de
+ranking e remove projetos e perfis ao final. O relatório do baseline lexical
+está em `../docs/relatorios/avaliacao-modelo-v3-2026-11-05.md`; a validação
+vigente é a do relatório v4 citado acima.
 
 ## Ranker legado v1
 

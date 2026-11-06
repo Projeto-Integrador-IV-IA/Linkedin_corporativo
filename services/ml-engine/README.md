@@ -5,8 +5,9 @@ treinamento e a geração do artefato ficam em [`../../ml/README.md`](../../ml/R
 
 ## Execução
 
-No Compose, o serviço escuta internamente na porta `8000` e carrega o artefato
-montado em `/app/models/job_ranker.joblib`.
+No Compose, o serviço escuta internamente na porta `8000`, carrega o artefato
+lexical em `/app/models/job_ranker.joblib` e o encoder semântico ONNX em
+`/app/models/semantic-e5/`.
 
 Endpoints principais:
 
@@ -20,17 +21,19 @@ O contrato da requisição e da resposta está em
 
 ## Comportamento do modelo
 
-Na inicialização, o serviço carrega somente artefatos marcados como
-`description-ranker-v2`. `/predict` recebe `project_description` e uma lista de
-`profile_description`, calcula as features textuais e devolve todos os
-candidatos ordenados.
+Na inicialização, o serviço carrega o componente lexical
+`description-ranker-v3` e o `intfloat/multilingual-e5-small` em ONNX. O runtime
+`hybrid-semantic-ranker-v4` combina os dois sinais. `/predict` recebe
+`project_description` e uma lista de `profile_description`, calcula o índice
+de aderência e devolve todos os candidatos ordenados.
 
-O score exibido pelo produto é uma compatibilidade textual de 0 a 100. Não
+O score exibido pelo produto é um índice de aderência de 0 a 100 pontos. Não
 representa probabilidade de contratação ou decisão automática de RH.
 
-Se o artefato estiver ausente ou não puder ser lido, o serviço usa o fallback
-determinístico implementado para o desenvolvimento e informa o estado no
-healthcheck. Isso não substitui a publicação do modelo em produção.
+No ambiente Compose, `REQUIRE_SEMANTIC_MODEL=true`: se qualquer componente não
+puder ser carregado, `/health` e `/predict` respondem 503. O fallback
+determinístico existe apenas para testes unitários e não é aceito como estado
+pronto em produção.
 
 ## Separação de responsabilidades
 

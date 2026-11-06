@@ -92,7 +92,7 @@ conta pode iniciar uma sessão de vaga e uma sessão de perfil/portfólio a cada
 ## Recomendação supervisionada
 
 O Match Orchestrator combina a descrição da vaga com a bio e as descrições dos
-projetos de portfólio e chama o ML Engine. O contrato v2 não usa skills,
+projetos de portfólio e chama o ML Engine. O ranker híbrido v4 não usa skills,
 profissão ou experiência como colunas separadas.
 
 - relevância `1`: candidatura observada;
@@ -100,14 +100,14 @@ profissão ou experiência como colunas separadas.
 - consulta de ranking: usuário e janela temporal;
 - saída: profissionais ordenados do maior para o menor score.
 
-Cada recomendação mostra uma porcentagem de correspondência de 0 a 100. Essa
-porcentagem representa compatibilidade textual no modelo publicado, não uma
-garantia de contratação. O cartão do profissional permite abrir o
+Cada recomendação mostra um índice de aderência de 0 a 100 pontos. O índice
+combina sinais lexical e semântico e não representa probabilidade nem garantia
+de contratação. O cartão do profissional permite abrir o
 perfil, iniciar um chat, aceitar ou rejeitar.
 
-A lista pode ser filtrada por compatibilidade mínima e por manifestação de
+A lista pode ser filtrada por aderência mínima e por manifestação de
 interesse. O responsável também escolhe exibir até 5, 10, 20 ou 50 profissionais;
-o padrão é 10, sempre preservando a ordem de maior compatibilidade.
+o padrão é 10, sempre preservando a ordem de maior aderência.
 
 Ao rejeitar, o profissional deixa de aparecer na lista ativa daquele projeto,
 mas a decisão fica salva no histórico. É possível consultar o histórico e

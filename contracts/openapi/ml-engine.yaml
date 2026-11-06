@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ML Engine API
-  version: 2.0.0
+  version: 4.0.0
   description: Contrato entre o Match Orchestrator e o serviço Python de inferência.
 paths:
   /health:
@@ -14,15 +14,26 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [status]
+                required: [status, ready, model_loaded, semantic_model_loaded, ranking_version]
                 properties:
                   status:
                     type: string
                     example: UP
+                  ready:
+                    type: boolean
+                    description: Verdadeiro somente quando os componentes lexical e semântico estão carregados.
+                    example: true
                   model_loaded:
                     type: boolean
                     description: Indica se o artefato job_ranker.joblib foi carregado.
                     example: true
+                  semantic_model_loaded:
+                    type: boolean
+                    description: Indica se o encoder semântico multilíngue ONNX foi carregado.
+                    example: true
+                  ranking_version:
+                    type: string
+                    example: hybrid-semantic-ranker-v4
   /predict:
     post:
       operationId: predict
@@ -41,6 +52,8 @@ paths:
                 $ref: '#/components/schemas/MatchResponse'
         '422':
           description: Payload inválido
+        '503':
+          description: Um dos componentes obrigatórios do ranker não está pronto
 components:
   schemas:
     Candidate:
@@ -72,10 +85,14 @@ components:
           type: number
           minimum: 0
           maximum: 100
+          description: Índice de aderência em pontos; não é probabilidade de contratação.
     MatchResponse:
       type: object
-      required: [results]
+      required: [ranking_version, results]
       properties:
+        ranking_version:
+          type: string
+          example: hybrid-semantic-ranker-v4
         results:
           type: array
           items:
