@@ -1,6 +1,6 @@
 # Deploy no Dokploy
 
-Este procedimento publica o sistema em `https://rafixx.com` usando o
+Este procedimento publica o sistema em `https://synapse.rafixx.com` usando o
 Docker Compose deste repositório.
 
 ## 1. Preparar o DNS
@@ -9,13 +9,12 @@ No provedor do domínio, crie um registro:
 
 ```text
 Tipo: A
-Nome: @
+Nome: synapse
 Valor: IP_PUBLICO_DO_SERVIDOR
 ```
 
-Se quiser aceitar também `www.rafixx.com`, crie um `CNAME` de `www` para
-`rafixx.com`. O exemplo de CORS já permite as duas origens; no Dokploy, a forma
-mais simples é cadastrar `www.rafixx.com` e redirecioná-lo para o domínio raiz.
+Se o DNS for gerenciado pelo Cloudflare, o registro pode permanecer com proxy
+ativado depois que o domínio estiver respondendo corretamente no Dokploy.
 
 Libere as portas TCP `80` e `443` no firewall do servidor. O certificado HTTPS
 do Let's Encrypt só poderá ser emitido depois que o domínio apontar para o
@@ -64,8 +63,8 @@ PROJECT_SERVICE_PORT=8082
 MATCH_ORCHESTRATOR_PORT=8083
 ML_ENGINE_PORT=8000
 NEXT_PUBLIC_API_BASE_URL=/api
-APP_PUBLIC_URL=https://rafixx.com
-CORS_ALLOWED_ORIGIN_PATTERNS=https://rafixx.com,https://www.rafixx.com
+APP_PUBLIC_URL=https://synapse.rafixx.com
+CORS_ALLOWED_ORIGIN_PATTERNS=https://synapse.rafixx.com
 
 POSTGRES_VERSION=16-alpine
 POSTGRES_PROFILE_DB=profile_service
@@ -102,8 +101,8 @@ Na aba **Domains** da aplicação Compose, crie duas regras HTTPS:
 
 | Serviço | Host | Path | Porta do container | HTTPS |
 |---|---|---|---:|---|
-| `frontend` | `rafixx.com` | `/` | `3000` | Let's Encrypt |
-| `api-gateway` | `rafixx.com` | `/api` | `8080` | Let's Encrypt |
+| `frontend` | `synapse.rafixx.com` | `/` | `3000` | Let's Encrypt |
+| `api-gateway` | `synapse.rafixx.com` | `/api` | `8080` | Let's Encrypt |
 
 Na regra do Gateway, mantenha o caminho `/api` chegando ao serviço, sem
 remover o prefixo (`Strip Path` desativado). O Gateway já possui rotas como
@@ -119,8 +118,8 @@ Clique em **Deploy** e acompanhe os logs dos serviços. Após a conclusão,
 verifique:
 
 ```bash
-curl -I https://rafixx.com
-curl -i https://rafixx.com/api/auth/me
+curl -I https://synapse.rafixx.com
+curl -i https://synapse.rafixx.com/api/auth/me
 ```
 
 O segundo comando deve chegar ao Gateway e responder `401`/`403` sem token;

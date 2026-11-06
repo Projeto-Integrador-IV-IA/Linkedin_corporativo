@@ -1,6 +1,6 @@
 package br.com.linkedincorporativo.apigateway;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
@@ -147,14 +147,41 @@ public class ApiProxyController {
     }
     private static void addAuth(HttpHeaders headers, String auth) { if (auth != null && !auth.isBlank()) headers.set("Authorization", auth); }
     private ResponseEntity<Object> error(RestClientResponseException exception) {
-        String body = exception.getResponseBodyAsString();
-        if (body != null && !body.isBlank()) {
-            try {
-                return ResponseEntity.status(exception.getStatusCode()).body(objectMapper.readValue(body, Object.class));
-            } catch (JsonProcessingException ignored) {
-                return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", body));
-            }
+        String message = upstreamMessage(exception.getResponseBodyAsString());
+        if (message.isBlank()) message = statusMessage(exception.getStatusCode().value());
+        return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", message));
+    }
+    private String upstreamMessage(String body) {
+        if (body == null || body.isBlank()) return "";
+        try {
+            JsonNode response = objectMapper.readTree(body);
+            String message = text(response.get("message"));
+            if (!message.isBlank()) return message;
+            String detail = text(response.get("detail"));
+            if (!detail.isBlank() && !detail.startsWith("{") && !detail.startsWith("[")) return detail;
+        } catch (Exception ignored) {
+            String plain = body.trim();
+            if (plain.length() <= 240 && !plain.startsWith("<") && !plain.startsWith("{")) return plain;
         }
-        return ResponseEntity.status(exception.getStatusCode()).body(Map.of("message", "Não foi possível concluir a solicitação."));
+        return "";
+    }
+    private static String text(JsonNode value) {
+        return value != null && value.isTextual() ? value.asText().trim() : "";
+    }
+    private static String statusMessage(int status) {
+        return switch (status) {
+            case 400 -> "Revise os dados informados e tente novamente.";
+            case 401 -> "Não foi possível autenticar. Confira suas credenciais ou entre novamente.";
+            case 403 -> "Você não tem permissão para realizar esta ação.";
+            case 404 -> "Não encontramos o conteúdo solicitado.";
+            case 405 -> "Esta operação não está disponível.";
+            case 409 -> "Não foi possível concluir porque os dados já existem ou foram alterados.";
+            case 413 -> "O arquivo ou conteúdo enviado é maior que o permitido.";
+            case 429 -> "Muitas tentativas em pouco tempo. Aguarde um momento e tente novamente.";
+            case 502, 503, 504 -> "Um serviço está temporariamente indisponível. Tente novamente em instantes.";
+            default -> status >= 500
+                ? "Ocorreu um erro inesperado. Tente novamente em instantes."
+                : "Não foi possível concluir a solicitação.";
+        };
     }
 }

@@ -28,17 +28,73 @@ type RemoteProject = {
   interestedCount?: number
 }
 
-function errorMessage(body: string, fallback: string) {
+const TECHNICAL_MESSAGES = new Set([
+  "bad request",
+  "unauthorized",
+  "forbidden",
+  "not found",
+  "method not allowed",
+  "internal server error",
+  "bad gateway",
+  "service unavailable",
+  "gateway timeout",
+])
+
+function statusMessage(status: number, path: string) {
+  if (status === 400) return "Revise os dados informados e tente novamente."
+  if (status === 401 && path === "/auth/login") return "E-mail ou senha inválidos."
+  if (status === 401) return "Sua sessão expirou. Entre novamente para continuar."
+  if (status === 403) return "Você não tem permissão para realizar esta ação."
+  if (status === 404) return "Não encontramos o conteúdo solicitado."
+  if (status === 405) return "Esta operação não está disponível."
+  if (status === 409) return "Não foi possível concluir porque os dados já existem ou foram alterados."
+  if (status === 413) return "O arquivo ou conteúdo enviado é maior que o permitido."
+  if (status === 429) return "Muitas tentativas em pouco tempo. Aguarde um momento e tente novamente."
+  if ([502, 503, 504].includes(status)) return "Um serviço está temporariamente indisponível. Tente novamente em instantes."
+  if (status >= 500) return "Ocorreu um erro inesperado. Tente novamente em instantes."
+  return "Não foi possível concluir a solicitação."
+}
+
+function readableMessage(value: unknown) {
+  if (typeof value !== "string") return ""
+  const message = value.trim()
+  if (!message || TECHNICAL_MESSAGES.has(message.toLowerCase())) return ""
+  return message
+}
+
+function detailMessage(value: unknown) {
+  const direct = readableMessage(value)
+  if (direct) return direct
+  if (!Array.isArray(value)) return ""
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object" || !("msg" in item)) return ""
+      return readableMessage(item.msg)
+    })
+    .filter(Boolean)
+    .join(" ")
+}
+
+function errorMessage(body: string, status: number, path: string) {
+  const fallback = statusMessage(status, path)
   if (!body.trim()) return fallback
   try {
     const parsed: unknown = JSON.parse(body)
-    if (parsed && typeof parsed === "object" && "message" in parsed && typeof parsed.message === "string") {
-      return parsed.message
+    if (parsed && typeof parsed === "object") {
+      if ("message" in parsed) {
+        const message = readableMessage(parsed.message)
+        if (message) return message
+      }
+      if ("detail" in parsed) {
+        const message = detailMessage(parsed.detail)
+        if (message) return message
+      }
     }
   } catch {
-    // Respostas não JSON continuam exibindo o texto retornado pelo serviço.
+    const plainText = readableMessage(body)
+    if (plainText && plainText.length <= 240 && !plainText.startsWith("<")) return plainText
   }
-  return body
+  return fallback
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -50,19 +106,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const token = window.localStorage.getItem("talentmatch_token")
     if (token) headers.set("Authorization", `Bearer ${token}`)
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+    })
+  } catch {
+    throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.")
+  }
 
   if (!response.ok) {
     const body = await response.text()
-    throw new Error(errorMessage(body, `Erro ${response.status} ao acessar a API.`))
+    throw new Error(errorMessage(body, response.status, path))
   }
 
   if (response.status === 204) return undefined as T
-  return response.json() as Promise<T>
+  try {
+    return await response.json() as T
+  } catch {
+    throw new Error("O servidor respondeu de forma inesperada. Tente novamente em instantes.")
+  }
 }
 
 export function mapProfile(profile: RemoteProfile): Profile {
@@ -456,11 +521,17 @@ export function sendMessage(conversationId: string, content: string, file?: File
 
 async function fetchChatAttachment(conversationId: string, messageId: string) {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("talentmatch_token") : null
-  const response = await fetch(`${API_BASE_URL}/chats/${conversationId}/messages/${messageId}/attachment`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    cache: "no-store",
-  })
-  if (!response.ok) throw new Error("Não foi possível carregar o arquivo.")
+  const path = `/chats/${conversationId}/messages/${messageId}/attachment`
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      cache: "no-store",
+    })
+  } catch {
+    throw new Error("Não foi possível conectar ao servidor para carregar o arquivo.")
+  }
+  if (!response.ok) throw new Error(errorMessage(await response.text(), response.status, path))
   return URL.createObjectURL(await response.blob())
 }
 

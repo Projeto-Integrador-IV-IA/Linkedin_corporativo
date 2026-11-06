@@ -12,7 +12,7 @@ services:
       PROFILE_SERVICE_URL: http://profile-service:${PROFILE_SERVICE_PORT}
       PROJECT_SERVICE_URL: http://project-service:${PROJECT_SERVICE_PORT}
       MATCH_ORCHESTRATOR_URL: http://match-orchestrator:${MATCH_ORCHESTRATOR_PORT}
-      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-https://rafixx.com,https://www.rafixx.com}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-https://synapse.rafixx.com}
     expose:
       - "${API_GATEWAY_PORT}"
     depends_on:
