@@ -47,5 +47,12 @@ ml/models/*
 !ml/models/job_ranker.joblib
 frontend/Grupo2.zip
 
+# Entregas acadêmicas e materiais locais de apresentação
+docs/relatorios/
+docs/artigo/
+docs/ArtigoOFICIAL/
+docs/slide/
+docs/*.pdf
+
 # Overrides locais do Compose
 docker-compose.override.yml
