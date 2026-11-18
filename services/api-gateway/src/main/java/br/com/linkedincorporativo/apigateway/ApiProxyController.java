@@ -51,6 +51,8 @@ public class ApiProxyController {
     @PostMapping("/ai/descriptions/sessions/{id}/finish") public ResponseEntity<Object> finishAiDescription(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return post(projectUrl + "/api/ai/descriptions/sessions/" + id + "/finish", body, auth); }
 
     @GetMapping("/admin/metrics") public ResponseEntity<Object> adminMetrics(@RequestParam(defaultValue = "30") int days, @RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/admin/metrics?days=" + days, auth); }
+    @GetMapping("/admin/llm-limits") public ResponseEntity<Object> adminLlmLimits(@RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/admin/llm-limits", auth); }
+    @PatchMapping("/admin/llm-limits/{id}") public ResponseEntity<Object> updateAdminLlmLimit(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth, @RequestBody Object body) { return patch(projectUrl + "/api/admin/llm-limits/" + id, body, auth); }
 
     @GetMapping("/feed/projects") public ResponseEntity<Object> projectFeed(@RequestHeader(value = "Authorization", required = false) String auth) { return get(projectUrl + "/api/feed/projects", auth); }
     @PostMapping("/feed/projects/{id}/interest") public ResponseEntity<Object> expressInterest(@PathVariable Long id, @RequestHeader(value = "Authorization", required = false) String auth) { return post(projectUrl + "/api/feed/projects/" + id + "/interest", Map.of(), auth); }

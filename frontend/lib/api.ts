@@ -361,6 +361,26 @@ export function getAdminUsageMetrics(days = 30) {
   return request<AdminUsageMetrics>(`/admin/metrics?days=${Math.max(1, Math.min(365, days))}`)
 }
 
+export interface AdminLlmAccountLimit {
+  id: number
+  email: string
+  displayName: string
+  sessionsPer24Hours: number | null
+  usedLast24Hours: number
+  nextAvailableAt: string | null
+}
+
+export function getAdminLlmLimits() {
+  return request<AdminLlmAccountLimit[]>("/admin/llm-limits")
+}
+
+export function updateAdminLlmLimit(userId: number, sessionsPer24Hours: number | null) {
+  return request<AdminLlmAccountLimit>(`/admin/llm-limits/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ sessionsPer24Hours }),
+  })
+}
+
 export function addPortfolioProject(profileId: string, project: PortfolioProject) {
   return request<RemoteProfile>(`/profiles/${profileId}/portfolio`, {
     method: "POST",

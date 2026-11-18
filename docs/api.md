@@ -78,6 +78,21 @@ não possuem custos separados. Enquanto os preços estiverem em zero, o painel m
 as métricas de volume e desempenho e sinaliza que a estimativa monetária não
 foi configurada.
 
+## Limites de uso da IA por conta
+
+As rotas abaixo exigem uma sessão `ADMIN`:
+
+| Método | Rota | Uso |
+|---|---|---|
+| `GET` | `/admin/llm-limits` | lista contas de membro, limite individual e sessões iniciadas nas últimas 24 horas |
+| `PATCH` | `/admin/llm-limits/{userId}` | define `{ "sessionsPer24Hours": 2 }` para uma conta |
+
+`sessionsPer24Hours` aceita inteiros de `0` a `100`. `0` impede novas sessões;
+`null` restaura a regra padrão de intervalo por contexto. Um limite individual
+conta sessões iniciadas em uma janela móvel de 24 horas, considerando vaga,
+perfil e portfólio juntos. Cada sessão ainda admite até três reformulações.
+O limite é verificado no servidor antes de chamar o provedor de IA.
+
 ## Perfis
 
 | Método | Rota | Uso |
@@ -168,9 +183,11 @@ Service. A chave do provedor nunca é enviada ao navegador.
 | `POST` | `/ai/descriptions/sessions/{id}/continue` | gera uma rodada menor de perguntas |
 | `POST` | `/ai/descriptions/sessions/{id}/finish` | aceita ou aplica a edição humana |
 
-`contextType` aceita `VACANCY`, `PROFILE` e `PORTFOLIO`. Cada conta pode abrir
-uma sessão de vaga e uma sessão compartilhada entre perfil/portfólio por janela
-de 24 horas. A sessão permite no máximo três versões; na
+`contextType` aceita `VACANCY`, `PROFILE` e `PORTFOLIO`. Pela regra padrão, cada
+conta pode abrir uma sessão de vaga e uma sessão compartilhada entre
+perfil/portfólio por janela de 24 horas. Um limite individual definido pelo
+admin substitui essa regra por um total de sessões em qualquer contexto nas
+últimas 24 horas. A sessão permite no máximo três versões; na
 terceira, as únicas ações são aceitar ou editar. O texto nunca é gravado no
 perfil ou na vaga sem confirmação no formulário.
 

@@ -3,6 +3,7 @@ package br.com.linkedincorporativo.project;
 import br.com.linkedincorporativo.project.domain.AiDescriptionSession;
 import br.com.linkedincorporativo.project.domain.UserAccount;
 import br.com.linkedincorporativo.project.repository.AiDescriptionSessionRepository;
+import br.com.linkedincorporativo.project.repository.UserAccountRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @RestController
 @RequestMapping("/api/ai/descriptions/sessions")
@@ -27,13 +29,18 @@ public class AiDescriptionController {
     private static final Set<String> CONTEXTS = Set.of("VACANCY", "PROFILE", "PORTFOLIO");
     private static final int MAX_VERSIONS = 3;
     private final AiDescriptionSessionRepository sessions;
+    private final UserAccountRepository users;
+    private final TransactionTemplate transaction;
     private final LlmProviderClient llm;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Duration cooldown;
 
-    public AiDescriptionController(AiDescriptionSessionRepository sessions, LlmProviderClient llm,
+    public AiDescriptionController(AiDescriptionSessionRepository sessions, UserAccountRepository users,
+                                   TransactionTemplate transaction, LlmProviderClient llm,
                                    @Value("${llm.cooldown-hours:24}") long cooldownHours) {
         this.sessions = sessions;
+        this.users = users;
+        this.transaction = transaction;
         this.llm = llm;
         this.cooldown = Duration.ofHours(Math.max(0, cooldownHours));
     }
@@ -45,38 +52,74 @@ public class AiDescriptionController {
         authorizeContext(contextType, currentUser);
         String text = validateText(request.text());
         Instant now = Instant.now();
-        List<String> cooldownContexts = "VACANCY".equals(contextType)
-            ? List.of("VACANCY")
-            : List.of("PROFILE", "PORTFOLIO");
-        var blocked = llm.isMock() || cooldown.isZero()
-            ? java.util.Optional.<AiDescriptionSession>empty()
-            : sessions.findFirstByUserIdAndContextTypeInAndCooldownUntilAfterOrderByCreatedAtDesc(
-                currentUser.getId(), cooldownContexts, now
-            );
-        if (blocked.isPresent()) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of(
-                "message", "Você já utilizou a assistência de IA recentemente. Tente novamente após o horário indicado.",
-                "availableAt", blocked.get().getCooldownUntil().toString()
-            ));
+        StartDecision decision = transaction.execute(ignored -> reserve(currentUser.getId(), contextType, text, now));
+        if (decision == null) throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Não foi possível iniciar a sessão de IA.");
+        if (decision.rejection() != null) return decision.rejection();
+        AiDescriptionSession session = decision.session();
+        try {
+            List<String> questions = llm.questions(currentUser.getId(), contextType, text, 0, 5);
+            session.setQuestionsJson(mapper.writeValueAsString(questions));
+            session.setStatus("QUESTIONS");
+            return ResponseEntity.status(HttpStatus.CREATED).body(view(sessions.save(session), questions));
+        } catch (RuntimeException | JsonProcessingException error) {
+            sessions.deleteById(session.getId());
+            throw error;
         }
-        List<String> questions = llm.questions(currentUser.getId(), contextType, text, 0, 5);
+    }
+
+    private StartDecision reserve(Long userId, String contextType, String text, Instant now) {
+        UserAccount account = users.findByIdForUpdate(userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Conta não encontrada."));
+        Integer accountLimit = account.getLlmSessionsPer24Hours();
+        if (accountLimit != null) {
+            List<AiDescriptionSession> recent = sessions.findByUserIdAndCreatedAtAfterOrderByCreatedAtAsc(
+                account.getId(), now.minus(Duration.ofHours(24))
+            );
+            if (recent.size() >= accountLimit) {
+                String availableAt = recent.isEmpty() ? null : recent.get(0).getCreatedAt().plus(Duration.ofHours(24)).toString();
+                Map<String, Object> body = new java.util.HashMap<>();
+                body.put("message", accountLimit == 0
+                    ? "O uso do assistente de IA está desativado para esta conta."
+                    : "Você atingiu o limite de sessões de IA nas últimas 24 horas.");
+                if (availableAt != null) body.put("availableAt", availableAt);
+                return new StartDecision(null, ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(body));
+            }
+        } else {
+            List<String> cooldownContexts = "VACANCY".equals(contextType)
+                ? List.of("VACANCY")
+                : List.of("PROFILE", "PORTFOLIO");
+            var blocked = llm.isMock() || cooldown.isZero()
+                ? java.util.Optional.<AiDescriptionSession>empty()
+                : sessions.findFirstByUserIdAndContextTypeInAndCooldownUntilAfterOrderByCreatedAtDesc(
+                    account.getId(), cooldownContexts, now
+                );
+            if (blocked.isPresent()) {
+                return new StartDecision(null, ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of(
+                    "message", "Você já utilizou a assistência de IA recentemente. Tente novamente após o horário indicado.",
+                    "availableAt", blocked.get().getCooldownUntil().toString()
+                )));
+            }
+        }
         AiDescriptionSession session = new AiDescriptionSession();
-        session.setUserId(currentUser.getId());
+        session.setUserId(userId);
         session.setContextType(contextType);
-        session.setStatus("QUESTIONS");
+        session.setStatus("PENDING");
         session.setVersionCount(0);
         session.setCurrentText(text);
-        session.setQuestionsJson(mapper.writeValueAsString(questions));
+        session.setQuestionsJson("[]");
         session.setCreatedAt(now);
         session.setUpdatedAt(now);
         session.setCooldownUntil(llm.isMock() || cooldown.isZero() ? now : now.plus(cooldown));
-        return ResponseEntity.status(HttpStatus.CREATED).body(view(sessions.save(session), questions));
+        return new StartDecision(sessions.save(session), null);
     }
+
+    private record StartDecision(AiDescriptionSession session, ResponseEntity<?> rejection) {}
 
     @PostMapping("/{id}/generate")
     public ResponseEntity<?> generate(@PathVariable Long id, @RequestBody GenerateRequest request,
                                       @RequestAttribute("currentUser") UserAccount currentUser) {
         AiDescriptionSession session = owned(id, currentUser);
+        requireStatus(session, "QUESTIONS");
         if (session.getVersionCount() >= MAX_VERSIONS) return limitReached(session);
         String base = request.text() == null || request.text().isBlank() ? session.getCurrentText() : validateText(request.text());
         List<String> answers = request.answers() == null ? List.of() : request.answers().stream()
@@ -94,6 +137,7 @@ public class AiDescriptionController {
     public ResponseEntity<?> continueWithAi(@PathVariable Long id, @RequestBody ContinueRequest request,
                                             @RequestAttribute("currentUser") UserAccount currentUser) throws JsonProcessingException {
         AiDescriptionSession session = owned(id, currentUser);
+        requireStatus(session, "REVIEW");
         if (session.getVersionCount() >= MAX_VERSIONS) return limitReached(session);
         String base = request.text() == null || request.text().isBlank() ? session.getCurrentText() : validateText(request.text());
         int questionLimit = session.getVersionCount() == 1 ? 3 : 2;
@@ -110,6 +154,7 @@ public class AiDescriptionController {
     public ResponseEntity<?> finish(@PathVariable Long id, @RequestBody FinishRequest request,
                                     @RequestAttribute("currentUser") UserAccount currentUser) {
         AiDescriptionSession session = owned(id, currentUser);
+        requireStatus(session, "REVIEW");
         String action = request.action() == null ? "" : request.action().trim().toUpperCase();
         if (!Set.of("ACCEPT", "EDIT").contains(action)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A ação deve ser ACCEPT ou EDIT.");
         String text = request.text() == null || request.text().isBlank() ? session.getCurrentText() : validateText(request.text());
@@ -125,6 +170,12 @@ public class AiDescriptionController {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sessão de IA não encontrada."));
         if (!session.getUserId().equals(user.getId())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Esta sessão pertence a outro usuário.");
         return session;
+    }
+
+    private static void requireStatus(AiDescriptionSession session, String expected) {
+        if (!expected.equals(session.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta ação não está disponível na etapa atual da assistência de IA.");
+        }
     }
 
     private ResponseEntity<?> limitReached(AiDescriptionSession session) {

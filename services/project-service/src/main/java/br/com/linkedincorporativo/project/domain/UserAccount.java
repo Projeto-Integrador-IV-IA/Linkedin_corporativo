@@ -18,6 +18,7 @@ public class UserAccount {
     private String role = "MEMBER";
     private Long profileId;
     private String sessionToken;
+    private Integer llmSessionsPer24Hours;
 
     public Long getId() { return id; }
     public String getEmail() { return email; }
@@ -32,4 +33,6 @@ public class UserAccount {
     public void setProfileId(Long value) { this.profileId = value; }
     public String getSessionToken() { return sessionToken; }
     public void setSessionToken(String value) { this.sessionToken = value; }
+    public Integer getLlmSessionsPer24Hours() { return llmSessionsPer24Hours; }
+    public void setLlmSessionsPer24Hours(Integer value) { this.llmSessionsPer24Hours = value; }
 }

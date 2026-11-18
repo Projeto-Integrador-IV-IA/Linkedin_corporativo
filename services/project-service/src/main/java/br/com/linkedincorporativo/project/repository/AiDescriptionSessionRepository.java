@@ -3,6 +3,7 @@ package br.com.linkedincorporativo.project.repository;
 import br.com.linkedincorporativo.project.domain.AiDescriptionSession;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -10,4 +11,5 @@ public interface AiDescriptionSessionRepository extends JpaRepository<AiDescript
     Optional<AiDescriptionSession> findFirstByUserIdAndContextTypeInAndCooldownUntilAfterOrderByCreatedAtDesc(
         Long userId, Collection<String> contextTypes, Instant now
     );
+    List<AiDescriptionSession> findByUserIdAndCreatedAtAfterOrderByCreatedAtAsc(Long userId, Instant cutoff);
 }

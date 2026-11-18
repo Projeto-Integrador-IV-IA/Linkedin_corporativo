@@ -17,6 +17,7 @@ import {
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Card,
   CardContent,
@@ -33,7 +34,10 @@ import {
   SelectValue
 } from "@/components/ui/select"
 import {
+  getAdminLlmLimits,
   getAdminUsageMetrics,
+  updateAdminLlmLimit,
+  type AdminLlmAccountLimit,
   type AdminUsageMetrics,
   type LlmUsageSummary
 } from "@/lib/api"
@@ -137,6 +141,100 @@ function Breakdown({
   )
 }
 
+function AccountLlmLimits() {
+  const [accounts, setAccounts] = useState<AdminLlmAccountLimit[]>([])
+  const [drafts, setDrafts] = useState<Record<number, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState<number | null>(null)
+  const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+
+  async function refresh() {
+    setLoading(true)
+    setError("")
+    try {
+      const response = await getAdminLlmLimits()
+      setAccounts(response)
+      setDrafts(Object.fromEntries(response.map((account) => [account.id, account.sessionsPer24Hours?.toString() ?? ""])))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Não foi possível carregar as contas.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void refresh() }, [])
+
+  async function save(account: AdminLlmAccountLimit) {
+    const raw = (drafts[account.id] ?? "").trim()
+    const limit = raw === "" ? null : Number(raw)
+    if (limit !== null && (!Number.isInteger(limit) || limit < 0 || limit > 100)) {
+      setError("Informe um número inteiro entre 0 e 100, ou deixe vazio para usar a regra padrão.")
+      return
+    }
+    setSavingId(account.id)
+    setError("")
+    setNotice("")
+    try {
+      const updated = await updateAdminLlmLimit(account.id, limit)
+      setAccounts((previous) => previous.map((item) => item.id === updated.id ? updated : item))
+      setNotice(`Limite atualizado para ${updated.displayName || updated.email}.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Não foi possível salvar o limite.")
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-3">
+        <div>
+          <CardTitle>Limites da IA por conta</CardTitle>
+          <CardDescription>
+            Defina quantas sessões cada conta pode iniciar em 24 horas. Uma sessão inclui perguntas e até três reformulações. Vazio mantém a regra padrão; 0 bloqueia novos usos.
+          </CardDescription>
+        </div>
+        <Button type="button" variant="outline" size="icon" onClick={() => void refresh()} disabled={loading || savingId !== null} aria-label="Atualizar contas">
+          <RefreshCw className={loading ? "animate-spin" : ""} />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        {notice && <p role="status" className="text-sm text-primary">{notice}</p>}
+        {loading && accounts.length === 0 && <p className="text-sm text-muted-foreground">Carregando contas...</p>}
+        {!loading && accounts.length === 0 && !error && <p className="text-sm text-muted-foreground">Nenhuma conta de membro encontrada.</p>}
+        {accounts.map((account) => (
+          <div key={account.id} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="truncate font-medium">{account.displayName || account.email}</p>
+              <p className="truncate text-xs text-muted-foreground">{account.email}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{account.usedLast24Hours} sessão(ões) iniciada(s) nas últimas 24 horas</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                className="w-24"
+                aria-label={`Limite de sessões em 24 horas para ${account.email}`}
+                placeholder="Padrão"
+                value={drafts[account.id] ?? ""}
+                onChange={(event) => setDrafts((previous) => ({ ...previous, [account.id]: event.target.value }))}
+                disabled={savingId === account.id}
+              />
+              <Button type="button" onClick={() => void save(account)} disabled={savingId !== null || loading}>
+                {savingId === account.id ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function AdminDashboard() {
   const [days, setDays] = useState("30")
   const [refreshKey, setRefreshKey] = useState(0)
@@ -187,20 +285,23 @@ export function AdminDashboard() {
 
   if (!metrics)
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-sm text-destructive">
-            {error || "Não foi possível carregar as métricas."}
-          </p>
-          <Button
-            className="mt-4"
-            variant="outline"
-            onClick={() => setRefreshKey((value) => value + 1)}
-          >
-            Tentar novamente
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-destructive">
+              {error || "Não foi possível carregar as métricas."}
+            </p>
+            <Button
+              className="mt-4"
+              variant="outline"
+              onClick={() => setRefreshKey((value) => value + 1)}
+            >
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+        <AccountLlmLimits />
+      </div>
     )
 
   const totals = metrics.totals
@@ -514,6 +615,8 @@ export function AdminDashboard() {
           </Badge>
         </CardContent>
       </Card>
+
+      <AccountLlmLimits />
     </div>
   )
 }
