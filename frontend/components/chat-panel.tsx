@@ -320,7 +320,7 @@ export function ChatPanel({
         compact
           ? embedded
             ? "compact-chat flex h-[min(520px,calc(100dvh-6rem))] w-[min(360px,calc(100vw-1.5rem))] shrink-0 flex-col shadow-2xl"
-            : "fixed bottom-2 right-2 z-50 flex h-[min(520px,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-[380px] flex-col shadow-2xl sm:bottom-4 sm:right-4"
+            : "fixed bottom-[calc(80px+env(safe-area-inset-bottom))] right-2 z-50 flex h-[min(520px,calc(100dvh-160px))] w-[calc(100vw-1rem)] max-w-[380px] flex-col shadow-2xl md:bottom-4 md:right-4 md:h-[min(520px,calc(100dvh-1rem))]"
           : "flex h-[min(680px,calc(100dvh-220px))] min-h-[520px] flex-col !rounded-none !py-0 !ring-0 !shadow-none"
       }
     >

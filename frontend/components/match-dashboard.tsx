@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import { BadgeCheck, Check, FilterX, GraduationCap, Heart, ListFilter, MessageCircle, RefreshCw, Sparkles, Target, Users, X } from "lucide-react"
 
 import { useApp } from "@/components/app-provider"
@@ -23,7 +24,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Progress } from "@/components/ui/progress"
 import {
   Select,
   SelectContent,
@@ -36,32 +36,12 @@ import { Separator } from "@/components/ui/separator"
 import { createChat, decideCandidate, listCandidateDecisions, listRecommendations, toMatchResult, type CandidateDecision, type ChatConversation } from "@/lib/api"
 import type { MatchResult, Profile } from "@/lib/types"
 
-function scoreTone(score: number) {
-  if (score >= 70)
-    return {
-      text: "text-chart-3",
-      bar: "[&_[data-slot=progress-indicator]]:bg-chart-3",
-      label: "Alta aderência",
-    }
-  if (score >= 50)
-    return {
-      text: "text-chart-4",
-      bar: "[&_[data-slot=progress-indicator]]:bg-chart-4",
-      label: "Aderência moderada",
-    }
-  return {
-    text: "text-muted-foreground",
-    bar: "[&_[data-slot=progress-indicator]]:bg-muted-foreground",
-    label: "Baixa aderência",
-  }
-}
-
 function ProfileDetailDialog({ profile }: { profile: Profile }) {
   return (
     <Dialog>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" className="w-full">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto">
             <BadgeCheck data-icon="inline-start" />
             Visualizar perfil completo
           </Button>
@@ -97,54 +77,25 @@ function ProfileDetailDialog({ profile }: { profile: Profile }) {
   )
 }
 
-function CandidateCard({ result, decision, onChat, onDecision }: { result: MatchResult; decision?: CandidateDecision; onChat: () => void; onDecision: (status: CandidateDecision["status"]) => void }) {
-  const { profile, score } = result
-  const tone = scoreTone(score)
+function CandidateRow({ result, rank, decision, openingChat, onChat, onDecision }: { result: MatchResult; rank: number; decision?: CandidateDecision; openingChat: boolean; onChat: () => void; onDecision: (status: CandidateDecision["status"]) => void }) {
+  const { profile } = result
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
-        <div className="flex items-center gap-3">
-          <ProfileAvatar profile={profile} className="size-11" />
+    <Card>
+      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary" aria-label={`${rank}ª posição`}>{rank}º</span>
+          <ProfileAvatar profile={profile} className="size-11 shrink-0" />
           <div className="min-w-0 flex-1">
-            <CardTitle className="truncate text-base">{profile.name}</CardTitle>
-            <CardDescription className="truncate">
-              {profile.profession}
-            </CardDescription>
+            <p className="truncate font-semibold">{profile.name}</p>
+            <p className="truncate text-sm text-muted-foreground">{profile.profession}</p>
+            {result.interested && <Badge variant="secondary" className="mt-1 gap-1.5 text-primary"><Heart className="size-3 fill-current" /> Demonstrou interesse</Badge>}
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-4">
-        {result.interested ? (
-          <Badge variant="secondary" className="w-fit gap-1.5 text-primary">
-            <Heart className="size-3 fill-current" /> Demonstrou interesse
-          </Badge>
-        ) : null}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted-foreground">
-              Índice de aderência textual
-            </span>
-            <span className={`text-2xl font-bold tabular-nums ${tone.text}`}>
-              {score}<span className="ml-0.5 text-sm font-medium">/100</span>
-            </span>
-          </div>
-          <Progress
-            value={score}
-            className={`[&_[data-slot=progress-track]]:h-2 ${tone.bar}`}
-          />
-          <span className={`text-xs font-medium ${tone.text}`}>{tone.label}</span>
-        </div>
-
-        <p className="line-clamp-4 text-sm text-muted-foreground">
-          {profile.projects || "Este profissional ainda não adicionou uma descrição profissional."}
-        </p>
-
-        <div className="mt-auto pt-1">
+        <p className="line-clamp-2 min-w-0 flex-1 text-sm text-muted-foreground">{profile.projects || "Este profissional ainda não adicionou uma descrição profissional."}</p>
+        <div className="flex shrink-0 flex-wrap gap-2 sm:max-w-72 sm:justify-end">
           <ProfileDetailDialog profile={profile} />
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <Button size="sm" variant="outline" onClick={onChat}><MessageCircle data-icon="inline-start" /> Chat</Button>
+          <Button size="sm" variant="outline" onClick={onChat} disabled={openingChat}><MessageCircle data-icon="inline-start" /> {openingChat ? "Abrindo..." : "Chat"}</Button>
           <Button size="sm" variant={decision?.status === "ACEITO" ? "default" : "outline"} onClick={() => onDecision("ACEITO")}><Check data-icon="inline-start" /> Aceitar</Button>
           <Button size="sm" variant={decision?.status === "REJEITADO" ? "destructive" : "ghost"} onClick={() => onDecision("REJEITADO")}><X data-icon="inline-start" /> Rejeitar</Button>
         </div>
@@ -162,8 +113,8 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
   const [error, setError] = useState("")
   const [decisions, setDecisions] = useState<Record<string, CandidateDecision>>({})
   const [chat, setChat] = useState<{ conversation: ChatConversation; profile: Profile } | null>(null)
+  const [openingChatId, setOpeningChatId] = useState<string | null>(null)
   const [recalculation, setRecalculation] = useState(0)
-  const [minScore, setMinScore] = useState("0")
   const [interestFilter, setInterestFilter] = useState("all")
   const [recommendationLimit, setRecommendationLimit] = useState("10")
   const [filteredTotal, setFilteredTotal] = useState(0)
@@ -192,7 +143,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
     setError("")
     Promise.all([
       listRecommendations(project.id, {
-        minScore: Number(minScore),
+        minScore: 0,
         interestedOnly: interestFilter === "interested",
         limit: Number(recommendationLimit),
       }),
@@ -227,25 +178,28 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
     return () => {
       active = false
     }
-  }, [project, profiles, recalculation, minScore, interestFilter, recommendationLimit])
+  }, [project, profiles, recalculation, interestFilter, recommendationLimit])
 
   function recalculate() {
     if (!loading) setRecalculation((value) => value + 1)
   }
 
   function clearFilters() {
-    setMinScore("0")
     setInterestFilter("all")
     setRecommendationLimit("10")
   }
 
   async function openChat(profile: Profile) {
-    if (!project) return
+    if (!project || openingChatId) return
+    setOpeningChatId(profile.id)
+    setError("")
     try {
       const conversation = await createChat(project.id, profile.id, profile.name, profile.email)
       setChat({ conversation, profile })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível abrir o chat.")
+    } finally {
+      setOpeningChatId(null)
     }
   }
 
@@ -265,12 +219,11 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
     }
   }
 
-  const topScore = candidates[0]?.score ?? 0
   const rejectedCandidates = Object.values(decisions).flatMap((decision) => {
     if (decision.status !== "REJEITADO") return []
     const result = allCandidates.find((item) => item.profile.id === decision.profileId)
     const profile = result?.profile ?? profiles.find((item) => item.id === decision.profileId)
-    return profile ? [{ profile, score: result?.score }] : []
+    return profile ? [{ profile }] : []
   })
 
   if (!project) {
@@ -336,29 +289,10 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
         <CardContent className="flex flex-col gap-4">
           {!projectId && <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Target className="size-4 text-primary" />
-            Ranking calculado exclusivamente pelas descrições. O índice apoia a comparação textual e não representa chance de contratação. O interesse declarado é apenas informativo.
+            Ranking calculado exclusivamente pelas descrições. A posição apoia a comparação textual e não representa chance de contratação. O interesse declarado é apenas informativo.
           </div>}
           <Separator />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="minimum-score-filter" className="text-sm font-medium">
-                Aderência mínima
-              </label>
-              <Select value={minScore} onValueChange={(value) => setMinScore(value ?? "0")}>
-                <SelectTrigger id="minimum-score-filter" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="0">Qualquer pontuação</SelectItem>
-                    <SelectItem value="50">50 pontos ou mais</SelectItem>
-                    <SelectItem value="60">60 pontos ou mais</SelectItem>
-                    <SelectItem value="70">70 pontos ou mais</SelectItem>
-                    <SelectItem value="80">80 pontos ou mais</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] xl:items-end">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="interest-filter" className="text-sm font-medium">
                 Interesse no projeto
@@ -397,7 +331,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
               type="button"
               variant="ghost"
               onClick={clearFilters}
-              disabled={minScore === "0" && interestFilter === "all" && recommendationLimit === "10"}
+              disabled={interestFilter === "all" && recommendationLimit === "10"}
             >
               <FilterX data-icon="inline-start" />
               Limpar
@@ -412,13 +346,6 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
                 exibidos de <strong className="text-foreground">{filteredTotal}</strong> que atendem aos filtros
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <BadgeCheck className="size-4 text-chart-3" />
-              <span className="text-sm text-muted-foreground">
-                Maior aderência:{" "}
-                <strong className="text-foreground">{topScore}/100</strong>
-              </span>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -426,9 +353,9 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
       {loading && <p className="text-sm text-muted-foreground">Calculando recomendações pelo modelo...</p>}
       {error && <p className="text-sm font-medium text-destructive">{error}</p>}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {candidates.map((result) => (
-          <CandidateCard key={result.profile.id} result={result} decision={decisions[result.profile.id]} onChat={() => openChat(result.profile)} onDecision={(status) => decide(result.profile.id, status)} />
+      <div className="flex flex-col gap-3" aria-label="Ranking de profissionais">
+        {candidates.map((result, index) => (
+          <CandidateRow key={result.profile.id} result={result} rank={index + 1} decision={decisions[result.profile.id]} openingChat={openingChatId === result.profile.id} onChat={() => openChat(result.profile)} onDecision={(status) => decide(result.profile.id, status)} />
         ))}
       </div>
       {!loading && !error && candidates.length === 0 && (
@@ -447,12 +374,12 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
             <CardDescription>Profissionais rejeitados não aparecem na lista principal, mas podem ser reconsiderados.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {rejectedCandidates.map(({ profile, score }) => (
+            {rejectedCandidates.map(({ profile }) => (
               <div key={profile.id} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium">{profile.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {profile.profession}{score !== undefined ? ` · ${score}/100 de aderência` : ""}
+                    {profile.profession}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -464,7 +391,7 @@ export function MatchDashboard({ projectId }: { projectId?: string }) {
           </CardContent>
         </Card>
       )}
-      {chat && <ChatPanel conversation={chat.conversation} profile={chat.profile} compact onClose={() => setChat(null)} />}
+      {chat && createPortal(<ChatPanel key={chat.conversation.id} conversation={chat.conversation} profile={chat.profile} compact onClose={() => setChat(null)} />, document.body)}
     </div>
   )
 }

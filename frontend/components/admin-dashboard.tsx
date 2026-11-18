@@ -148,6 +148,10 @@ function AccountLlmLimits() {
   const [savingId, setSavingId] = useState<number | null>(null)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
+  const [accountFilter, setAccountFilter] = useState("")
+  const filteredAccounts = accounts.filter((account) =>
+    `${account.displayName ?? ""} ${account.email}`.toLocaleLowerCase("pt-BR").includes(accountFilter.trim().toLocaleLowerCase("pt-BR"))
+  )
 
   async function refresh() {
     setLoading(true)
@@ -200,11 +204,16 @@ function AccountLlmLimits() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor="account-llm-filter" className="text-sm font-medium">Filtrar conta</label>
+          <Input id="account-llm-filter" type="search" placeholder="Busque por nome ou e-mail" value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)} />
+        </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {notice && <p role="status" className="text-sm text-primary">{notice}</p>}
         {loading && accounts.length === 0 && <p className="text-sm text-muted-foreground">Carregando contas...</p>}
         {!loading && accounts.length === 0 && !error && <p className="text-sm text-muted-foreground">Nenhuma conta de membro encontrada.</p>}
-        {accounts.map((account) => (
+        {!loading && accounts.length > 0 && filteredAccounts.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma conta corresponde à busca.</p>}
+        {filteredAccounts.map((account) => (
           <div key={account.id} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="truncate font-medium">{account.displayName || account.email}</p>
