@@ -43,11 +43,16 @@ export function AiDescriptionAssistant({ contextType, value, onApply, disabled }
   const [draft, setDraft] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [confirmIncomplete, setConfirmIncomplete] = useState(false)
+  const unansweredQuestions = session?.status === "QUESTIONS"
+    ? session.questions.flatMap((question, index) => answers[index]?.trim() ? [] : [{ question, number: index + 1 }])
+    : []
 
   async function start() {
     setOpen(true)
     setLoading(true)
     setError("")
+    setConfirmIncomplete(false)
     try {
       const created = await startAiDescription(contextType, value)
       setSession(created)
@@ -62,6 +67,7 @@ export function AiDescriptionAssistant({ contextType, value, onApply, disabled }
 
   async function generate() {
     if (!session) return
+    setConfirmIncomplete(false)
     setLoading(true)
     setError("")
     try {
@@ -76,10 +82,19 @@ export function AiDescriptionAssistant({ contextType, value, onApply, disabled }
     }
   }
 
+  function requestGenerate() {
+    if (unansweredQuestions.length > 0) {
+      setConfirmIncomplete(true)
+      return
+    }
+    void generate()
+  }
+
   async function continueWithAi() {
     if (!session) return
     setLoading(true)
     setError("")
+    setConfirmIncomplete(false)
     try {
       const continued = await continueAiDescription(session.sessionId, draft)
       setSession(continued)
@@ -143,15 +158,42 @@ export function AiDescriptionAssistant({ contextType, value, onApply, disabled }
                     id={`ai-answer-${index}`}
                     rows={2}
                     value={answers[index] ?? ""}
-                    onChange={(event) => setAnswers((previous) => previous.map((answer, answerIndex) => answerIndex === index ? event.target.value : answer))}
+                    onChange={(event) => {
+                      setConfirmIncomplete(false)
+                      setAnswers((previous) => previous.map((answer, answerIndex) => answerIndex === index ? event.target.value : answer))
+                    }}
                     placeholder="Sua resposta (opcional)"
                   />
                 </Field>
               ))}
-              <Button type="button" onClick={generate} disabled={loading}>
-                {loading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
-                Gerar versão {session.versionCount + 1} de {session.maxVersions}
-              </Button>
+              {confirmIncomplete ? (
+                <div role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+                  <p className="font-medium">
+                    {unansweredQuestions.length === 1
+                      ? "Você deixou 1 pergunta sem resposta. Deseja continuar assim mesmo?"
+                      : `Você deixou ${unansweredQuestions.length} perguntas sem resposta. Deseja continuar assim mesmo?`}
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+                    {unansweredQuestions.map(({ question, number }) => (
+                      <li key={number}>Pergunta {number}: {question}</li>
+                    ))}
+                  </ul>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" onClick={() => setConfirmIncomplete(false)} disabled={loading}>
+                      Voltar às perguntas
+                    </Button>
+                    <Button type="button" onClick={generate} disabled={loading}>
+                      {loading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+                      Continuar mesmo assim
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button type="button" onClick={requestGenerate} disabled={loading}>
+                  {loading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+                  Gerar versão {session.versionCount + 1} de {session.maxVersions}
+                </Button>
+              )}
             </div>
           )}
 
